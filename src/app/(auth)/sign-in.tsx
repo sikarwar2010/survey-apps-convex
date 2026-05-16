@@ -1,329 +1,152 @@
+/**
+ * Email + password sign-in via Clerk Core 3 (`@clerk/expo` v3+).
+ *
+ *  1. signIn.create({ identifier }) + signIn.password({ password })
+ *  2. signIn.finalize() → AuthGate loads Convex user and routes
+ */
+import { AppButton, AppInput } from "@/components";
 import { clerkErrorMessage } from "@/components/auth/field-error";
-import { authColors, authStyles } from "@/components/auth/styles";
-import { useAuth } from "@clerk/expo";
-import { useSignIn } from "@clerk/expo/legacy";
-import type { EmailCodeFactor, TOTPFactor } from "@clerk/shared/types";
-import { Link } from "expo-router";
-import { type ReactNode, useState } from "react";
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { useSignIn } from "@clerk/expo";
+import { Link, useRouter } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import { useState } from "react";
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+function incompleteSignInMessage(status: string): string {
+  switch (status) {
+    case "needs_second_factor":
+      return "Two-factor authentication is required for this account.";
+    case "needs_first_factor":
+      return "Additional verification is required. Check your email.";
+    case "needs_new_password":
+      return "You must set a new password before signing in.";
+    default:
+      return "Sign-in could not be completed. Try again.";
+  }
+}
+
 export default function SignInScreen() {
-  const { isSignedIn } = useAuth();
-  const { isLoaded, signIn, setActive } = useSignIn();
+  const { signIn, fetchStatus } = useSignIn();
+  const router = useRouter();
 
-  const [emailAddress, setEmailAddress] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [code, setCode] = useState("");
-  const [mfaRequired, setMfaRequired] = useState(false);
-  const [emailCodeRequired, setEmailCodeRequired] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [formError, setFormError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const finalizeSession = async (sessionId: string | null) => {
-    if (!sessionId || !setActive) return;
-    await setActive({ session: sessionId });
-  };
-
-  const onSignIn = async () => {
-    if (!isLoaded || !signIn) return;
-    setBusy(true);
-    setFormError("");
+  const onSubmit = async () => {
+    if (fetchStatus === "fetching") return;
+    setError(null);
+    setLoading(true);
     try {
-      const attempt = await signIn.create({
-        identifier: emailAddress,
-        password,
-      });
-
-      if (attempt.status === "complete") {
-        await finalizeSession(attempt.createdSessionId);
+      const { error: createError } = await signIn.create({ identifier: email.trim() });
+      if (createError) {
+        setError(clerkErrorMessage(createError));
         return;
       }
 
-      if (attempt.status === "needs_second_factor") {
-        const emailCodeFactor = attempt.supportedSecondFactors?.find(
-          (factor): factor is EmailCodeFactor => factor.strategy === "email_code",
-        );
-        if (emailCodeFactor) {
-          await signIn.prepareSecondFactor({
-            strategy: "email_code",
-            emailAddressId: emailCodeFactor.emailAddressId,
-          });
-          setEmailCodeRequired(true);
-          return;
-        }
-
-        const hasTotp = attempt.supportedSecondFactors?.some(
-          (factor): factor is TOTPFactor => factor.strategy === "totp",
-        );
-        if (hasTotp) {
-          setMfaRequired(true);
-        }
+      const { error: passwordError } = await signIn.password({ password });
+      if (passwordError) {
+        setError(clerkErrorMessage(passwordError));
+        return;
       }
-    } catch (err) {
-      setFormError(clerkErrorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  };
 
-  const onVerifyMfa = async () => {
-    if (!isLoaded || !signIn) return;
-    setBusy(true);
-    setFormError("");
-    try {
-      const attempt = await signIn.attemptSecondFactor({
-        strategy: "totp",
-        code,
+      if (signIn.status !== "complete") {
+        setError(incompleteSignInMessage(signIn.status));
+        return;
+      }
+
+      const { error: finalizeError } = await signIn.finalize({
+        navigate: () => router.replace("/(auth)/setup"),
       });
-      if (attempt.status === "complete") {
-        await finalizeSession(attempt.createdSessionId);
+      if (finalizeError) {
+        setError(clerkErrorMessage(finalizeError));
       }
-    } catch (err) {
-      setFormError(clerkErrorMessage(err));
     } finally {
-      setBusy(false);
+      setLoading(false);
     }
   };
 
-  const onVerifyEmailCode = async () => {
-    if (!isLoaded || !signIn) return;
-    setBusy(true);
-    setFormError("");
-    try {
-      const attempt = await signIn.attemptSecondFactor({
-        strategy: "email_code",
-        code,
-      });
-      if (attempt.status === "complete") {
-        await finalizeSession(attempt.createdSessionId);
-      }
-    } catch (err) {
-      setFormError(clerkErrorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const resetFlow = () => {
-    setCode("");
-    setMfaRequired(false);
-    setEmailCodeRequired(false);
-    setFormError("");
-  };
-
-  if (!isLoaded) {
-    return (
-      <View style={loadingStyle}>
-        <ActivityIndicator color="#003B8E" size="large" />
-      </View>
-    );
-  }
-
-  if (isSignedIn) return null;
-
-  if (emailCodeRequired) {
-    return (
-      <AuthShell title="Verify your account" subtitle="Enter the code sent to your email.">
-        <CodeForm
-          code={code}
-          onChangeCode={setCode}
-          codeError={formError}
-          busy={busy}
-          onVerify={onVerifyEmailCode}
-          onResend={async () => {
-            const factor = signIn?.supportedSecondFactors?.find(
-              (f): f is EmailCodeFactor => f.strategy === "email_code",
-            );
-            if (factor) {
-              await signIn?.prepareSecondFactor({
-                strategy: "email_code",
-                emailAddressId: factor.emailAddressId,
-              });
-            }
-          }}
-          onReset={resetFlow}
-        />
-      </AuthShell>
-    );
-  }
-
-  if (mfaRequired) {
-    return (
-      <AuthShell
-        title="Two-factor authentication"
-        subtitle="Enter the code from your authenticator app."
-      >
-        <CodeForm
-          code={code}
-          onChangeCode={setCode}
-          codeError={formError}
-          busy={busy}
-          onVerify={onVerifyMfa}
-          onReset={resetFlow}
-          resetLabel="Start over"
-        />
-      </AuthShell>
-    );
-  }
+  const canSubmit = Boolean(email.trim() && password) && !loading && fetchStatus !== "fetching";
 
   return (
-    <AuthShell title="Sign in" subtitle="Survey field operations">
-      <Text style={authStyles.label}>Email</Text>
-      <TextInput
-        style={authStyles.input}
-        autoCapitalize="none"
-        autoComplete="email"
-        value={emailAddress}
-        placeholder="you@company.com"
-        placeholderTextColor="#9CA3AF"
-        onChangeText={setEmailAddress}
-        keyboardType="email-address"
-        textContentType="emailAddress"
-      />
+    <View className="flex-1 bg-brand">
+      <StatusBar style="light" />
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} className="flex-1">
+        <SafeAreaView edges={["top"]} className="items-center pt-7 pb-7">
+          <View className="w-16 h-16 bg-white rounded-xl items-center justify-center">
+            <Text className="text-[22px] font-medium text-brand">SDV</Text>
+          </View>
+          <Text className="text-white text-h2 font-medium mt-3.5">Property Survey</Text>
+          <Text className="text-white/70 text-caption mt-0.5">Nagar Panchayat · GIS field</Text>
+        </SafeAreaView>
 
-      <Text style={authStyles.label}>Password</Text>
-      <TextInput
-        style={authStyles.input}
-        value={password}
-        placeholder="Password"
-        placeholderTextColor="#9CA3AF"
-        secureTextEntry
-        onChangeText={setPassword}
-        textContentType="password"
-      />
-      {formError ? <Text style={authStyles.error}>{formError}</Text> : null}
+        <ScrollView
+          className="flex-1 bg-surface-light dark:bg-surface-dark rounded-t-3xl"
+          contentContainerStyle={{ padding: 24, paddingBottom: 48 }}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Text className="text-h1 font-medium text-ink-primary-light dark:text-ink-primary-dark">
+            Sign in
+          </Text>
+          <Text className="text-helper text-ink-tertiary-light dark:text-ink-tertiary-dark mt-1 mb-6">
+            Use the email you signed up with
+          </Text>
 
-      <Pressable
-        style={({ pressed }) => [
-          authStyles.button,
-          (!emailAddress || !password || busy) && authStyles.buttonDisabled,
-          pressed && authStyles.buttonPressed,
-        ]}
-        onPress={onSignIn}
-        disabled={!emailAddress || !password || busy}
-      >
-        {busy ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={authStyles.buttonText}>Sign in</Text>
-        )}
-      </Pressable>
+          <AppInput
+            label="Email"
+            required
+            value={email}
+            onChangeText={setEmail}
+            placeholder="surveyor@ulb.gov.in"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            iconLeft="mail-outline"
+            containerClassName="mb-3.5"
+          />
 
-      <View style={authStyles.linkRow}>
-        <Text style={authStyles.linkMuted}>No account?</Text>
-        <Link href="/(auth)/sign-up">
-          <Text style={authStyles.link}>Sign up</Text>
-        </Link>
-      </View>
-    </AuthShell>
-  );
-}
+          <AppInput
+            label="Password"
+            required
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry={!showPassword}
+            iconLeft="lock-closed-outline"
+            iconRight={showPassword ? "eye-off-outline" : "eye-outline"}
+            onPressRightIcon={() => setShowPassword((v) => !v)}
+            errorText={error ?? undefined}
+            containerClassName="mb-3"
+          />
 
-function AuthShell({
-  title,
-  subtitle,
-  children,
-}: {
-  title: string;
-  subtitle: string;
-  children: ReactNode;
-}) {
-  return (
-    <SafeAreaView style={authStyles.safe}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
-        <ScrollView contentContainerStyle={authStyles.scroll} keyboardShouldPersistTaps="handled">
-          <Text style={authStyles.title}>{title}</Text>
-          <Text style={authStyles.subtitle}>{subtitle}</Text>
-          {children}
+          <Link href="/(auth)/forgot-password" asChild>
+            <Pressable hitSlop={6} className="self-end mb-5">
+              <Text className="text-helper font-medium text-brand">Forgot password?</Text>
+            </Pressable>
+          </Link>
+
+          <AppButton
+            label={loading ? "Signing in…" : "Sign in"}
+            loading={loading}
+            onPress={onSubmit}
+            disabled={!canSubmit}
+            fullWidth
+          />
+
+          <View className="flex-row justify-center items-center mt-6">
+            <Text className="text-caption text-ink-tertiary-light">
+              Do not have an account?{" "}
+            </Text>
+            <Link href="/(auth)/sign-up" asChild>
+              <Pressable hitSlop={6}>
+                <Text className="text-caption font-medium text-brand">Sign up</Text>
+              </Pressable>
+            </Link>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
-
-function CodeForm({
-  code,
-  onChangeCode,
-  codeError,
-  busy,
-  onVerify,
-  onResend,
-  onReset,
-  resetLabel = "Start over",
-}: {
-  code: string;
-  onChangeCode: (value: string) => void;
-  codeError?: string;
-  busy: boolean;
-  onVerify: () => void;
-  onResend?: () => void;
-  onReset: () => void;
-  resetLabel?: string;
-}) {
-  return (
-    <>
-      <TextInput
-        style={authStyles.input}
-        value={code}
-        placeholder="Verification code"
-        placeholderTextColor="#9CA3AF"
-        onChangeText={onChangeCode}
-        keyboardType="number-pad"
-        autoComplete="one-time-code"
-      />
-      {codeError ? <Text style={authStyles.error}>{codeError}</Text> : null}
-      <Pressable
-        style={({ pressed }) => [
-          authStyles.button,
-          (!code || busy) && authStyles.buttonDisabled,
-          pressed && authStyles.buttonPressed,
-        ]}
-        onPress={onVerify}
-        disabled={!code || busy}
-      >
-        {busy ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={authStyles.buttonText}>Verify</Text>
-        )}
-      </Pressable>
-      {onResend ? (
-        <Pressable
-          style={({ pressed }) => [authStyles.secondaryButton, pressed && authStyles.buttonPressed]}
-          onPress={onResend}
-        >
-          <Text style={authStyles.secondaryButtonText}>Send a new code</Text>
-        </Pressable>
-      ) : null}
-      <Pressable
-        style={({ pressed }) => [authStyles.secondaryButton, pressed && authStyles.buttonPressed]}
-        onPress={onReset}
-      >
-        <Text style={authStyles.secondaryButtonText}>{resetLabel}</Text>
-      </Pressable>
-    </>
-  );
-}
-
-const loadingStyle = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: authColors.background,
-  },
-}).container;

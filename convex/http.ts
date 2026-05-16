@@ -4,7 +4,8 @@
  * The only public HTTP route is the Clerk webhook receiver. Clerk POSTs
  * user.created / user.updated / user.deleted events here, signed with
  * `CLERK_WEBHOOK_SECRET`. We verify the signature, then upsert/delete the
- * matching row in the `users` table.
+ * matching row in the `users` table. The mobile setup screen also calls
+ * `users.provisionCurrentUser` when webhooks are delayed (typical in dev).
  *
  * Setup:
  *   1. Get the URL: `npx convex env | grep CONVEX_SITE_URL`

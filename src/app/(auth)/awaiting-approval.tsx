@@ -1,164 +1,146 @@
 /**
- * Admin → Pending approvals.
+ * Awaiting-approval screen.
  *
- * Reactive Convex query. The moment a user signs up via the Clerk
- * webhook, the row appears here without a refresh.
+ * Shown to users who've completed sign-up but whose admin has not yet
+ * approved them. We reactively read `currentUser` — the moment an admin
+ * flips `status` to `active`, Convex pushes the update and AuthGate
+ * routes the user into the app.
  */
-import { useState } from "react";
-import { Alert, FlatList, Pressable, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useMutation, useQuery } from "convex/react";
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import {
-  AppButton,
-  Avatar,
-  Banner,
-  EmptyState,
-  Spinner,
-  Tag,
-  Toast,
-} from "@/components";
-import { api } from "../../convex/_generated/api";
-import type { Id } from "../../convex/_generated/dataModel";
+import { AppButton, AppCard, Avatar, ListRow, PulseDot, Tag } from "@/components";
+import { useSyncConvexUser } from "@/hooks/use-sync-convex-user";
 import { timeAgo } from "@/utils/format";
-import { toUserMessage } from "@/utils/errors";
+import { useAuth } from "@clerk/expo";
+import { Ionicons } from "@expo/vector-icons";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, ScrollView, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-export default function ApprovalsScreen() {
-  const router = useRouter();
-  const pending = useQuery(api.admin.listPendingApprovals, {});
-  const rejectUser = useMutation(api.admin.rejectUser);
-  const [toast, setToast] = useState<{ title: string; tone: "success" | "danger" } | null>(null);
-  const [busyId, setBusyId] = useState<Id<"users"> | null>(null);
+export default function AwaitingApprovalScreen() {
+  const { signOut } = useAuth();
+  const { me, syncing } = useSyncConvexUser();
+  const [now, setNow] = useState(Date.now());
 
-  const onReject = (id: Id<"users">, name: string) => {
-    Alert.alert(
-      "Reject account?",
-      `${name} will be permanently denied access. They can be reactivated later from Users.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Reject",
-          style: "destructive",
-          onPress: async () => {
-            setBusyId(id);
-            try {
-              await rejectUser({ userId: id });
-              setToast({ title: "User rejected", tone: "success" });
-            } catch (e) {
-              setToast({ title: toUserMessage(e), tone: "danger" });
-            } finally {
-              setBusyId(null);
-            }
-          },
-        },
-      ],
+  // Refresh the "Submitted N min ago" line every minute so it stays accurate
+  // even though `me._creationTime` doesn't change.
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(t);
+  }, []);
+
+  if (!me) {
+    return (
+      <View className="flex-1 items-center justify-center bg-page-light dark:bg-page-dark">
+        <ActivityIndicator color="#003B8E" size="large" />
+        {syncing ? null : (
+          <Text className="mt-4 text-helper text-ink-tertiary-light">
+            Loading your profile…
+          </Text>
+        )}
+      </View>
     );
-  };
+  }
 
   return (
     <View className="flex-1 bg-page-light dark:bg-page-dark">
       <SafeAreaView edges={["top"]} className="bg-brand">
-        <View className="px-4 pt-2 pb-5">
-          <Text className="text-helper text-white/65">Admin</Text>
-          <Text className="text-h1 font-medium text-white mt-0.5">Approvals</Text>
-          <Text className="text-caption text-white/75 mt-1">
-            {pending?.length ?? 0} pending{" "}
-            {pending && pending.length === 1 ? "request" : "requests"}
-          </Text>
+        <View className="items-center py-7">
+          <Avatar name={me.name} tone="brand" size="xl" />
+          <Text className="text-h2 font-medium text-white mt-2.5">{me.name}</Text>
+          <Text className="text-caption text-white/75 mt-0.5">{me.email}</Text>
+          <View className="flex-row items-center bg-white/15 px-2.5 py-1 rounded-full mt-3 gap-1.5">
+            <PulseDot tone="warning" />
+            <Text className="text-[11px] font-medium text-white">Awaiting approval</Text>
+          </View>
         </View>
       </SafeAreaView>
 
-      {pending === undefined ? (
-        <Spinner label="Loading…" />
-      ) : pending.length === 0 ? (
-        <View className="px-4 mt-4">
-          <Banner
-            tone="success"
-            title="All caught up"
-            message="No accounts are awaiting approval right now. New sign-ups appear here in real time."
+      <ScrollView contentContainerStyle={{ padding: 14, paddingBottom: 32 }}>
+        <AppCard padded className="mb-4">
+          <View className="flex-row items-start">
+            <View className="w-9 h-9 rounded-full bg-warning-soft items-center justify-center">
+              <Ionicons name="hourglass-outline" size={18} color="#92400E" />
+            </View>
+            <View className="flex-1 ml-3">
+              <Text className="text-body font-medium text-ink-primary-light dark:text-ink-primary-dark">
+                Your account is being reviewed
+              </Text>
+              <Text className="text-helper text-ink-tertiary-light dark:text-ink-tertiary-dark mt-1">
+                An administrator from your municipality will approve access shortly. This page
+                will update automatically once you're approved — no need to refresh.
+              </Text>
+            </View>
+          </View>
+        </AppCard>
+
+        <Text className="text-label uppercase tracking-wider font-medium text-ink-secondary-light mb-2">
+          Your request
+        </Text>
+        <AppCard padded={false} className="mb-4">
+          <ListRow
+            icon="briefcase-outline"
+            iconTone="brand"
+            title="Role"
+            subtitle={me.requestedRole ?? "Not specified"}
+            showChevron={false}
           />
-          <EmptyState
-            icon="checkmark-done-circle-outline"
-            title="Inbox empty"
-            message="When someone signs up, they'll appear here for review."
+          <View className="h-px bg-line-subtle" />
+          <ListRow
+            icon="chatbubble-outline"
+            iconTone="neutral"
+            title="Reason"
+            subtitle={me.requestedReason || "—"}
+            showChevron={false}
           />
+          <View className="h-px bg-line-subtle" />
+          <ListRow
+            icon="time-outline"
+            iconTone="neutral"
+            title="Submitted"
+            subtitle={timeAgo(new Date(me._id ? Date.now() : now).toISOString())}
+            showChevron={false}
+          />
+        </AppCard>
+
+        <Text className="text-label uppercase tracking-wider font-medium text-ink-secondary-light mb-2">
+          What happens next
+        </Text>
+        <AppCard padded className="mb-4">
+          <Step n={1} title="Administrator reviews your request" body="Typically within 1 business day." />
+          <Step n={2} title="Role and wards are assigned" body="You'll be given access to specific wards in your municipality." />
+          <Step n={3} title="You're notified and routed to the app" body="This screen will change automatically." />
+        </AppCard>
+
+        <View className="flex-row gap-1.5 mb-4">
+          <Tag label="Sign-up complete" tone="success" icon="checkmark-circle" />
+          <Tag label="Email verified" tone="success" icon="mail-open" />
         </View>
-      ) : (
-        <FlatList
-          data={pending}
-          keyExtractor={(item) => item._id}
-          contentContainerStyle={{ padding: 14, paddingBottom: 24 }}
-          ItemSeparatorComponent={() => <View className="h-2" />}
-          renderItem={({ item }) => (
-            <Pressable
-              onPress={() =>
-                router.push({
-                  pathname: "/(admin)/approve-detail",
-                  params: { userId: item._id },
-                })
-              }
-              className="p-3.5 bg-surface-light dark:bg-surface-dark rounded-xl border border-line-subtle"
-            >
-              <View className="flex-row items-start">
-                <Avatar name={item.name} tone="warning" size="md" />
-                <View className="flex-1 ml-3">
-                  <Text className="text-[13px] font-medium text-ink-primary-light dark:text-ink-primary-dark">
-                    {item.name}
-                  </Text>
-                  <Text className="text-caption text-ink-tertiary-light dark:text-ink-tertiary-dark mt-0.5">
-                    {item.email}
-                  </Text>
-                  <View className="flex-row gap-1.5 mt-1.5">
-                    <Tag
-                      label={item.requestedRole ?? "Not specified"}
-                      tone="brand"
-                      icon="briefcase-outline"
-                    />
-                    <Tag label={timeAgo(new Date(item.createdAt).toISOString())} tone="neutral" icon="time-outline" />
-                  </View>
-                  {item.requestedReason ? (
-                    <Text
-                      className="text-caption text-ink-tertiary-light dark:text-ink-tertiary-dark mt-1.5"
-                      numberOfLines={2}
-                    >
-                      "{item.requestedReason}"
-                    </Text>
-                  ) : null}
-                </View>
-              </View>
 
-              <View className="flex-row gap-2 mt-3">
-                <AppButton
-                  label="Reject"
-                  variant="outline"
-                  size="sm"
-                  iconLeft="close-outline"
-                  onPress={() => onReject(item._id, item.name)}
-                  loading={busyId === item._id}
-                  className="flex-1"
-                />
-                <AppButton
-                  label="Review & approve"
-                  size="sm"
-                  iconRight="arrow-forward"
-                  onPress={() =>
-                    router.push({
-                      pathname: "/(admin)/approve-detail",
-                      params: { userId: item._id },
-                    })
-                  }
-                  className="flex-1"
-                />
-              </View>
-            </Pressable>
-          )}
+        <AppButton
+          label="Sign out"
+          variant="outline"
+          iconLeft="log-out-outline"
+          onPress={() => signOut()}
+          fullWidth
         />
-      )}
+      </ScrollView>
+    </View>
+  );
+}
 
-      {toast ? (
-        <Toast visible title={toast.title} tone={toast.tone} onHide={() => setToast(null)} />
-      ) : null}
+function Step({ n, title, body }: { n: number; title: string; body: string }) {
+  return (
+    <View className="flex-row items-start mb-3 last:mb-0">
+      <View className="w-7 h-7 rounded-full bg-brand-soft items-center justify-center">
+        <Text className="text-[11px] font-medium text-brand">{n}</Text>
+      </View>
+      <View className="flex-1 ml-3">
+        <Text className="text-[13px] font-medium text-ink-primary-light dark:text-ink-primary-dark">
+          {title}
+        </Text>
+        <Text className="text-caption text-ink-tertiary-light dark:text-ink-tertiary-dark mt-0.5">
+          {body}
+        </Text>
+      </View>
     </View>
   );
 }

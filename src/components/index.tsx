@@ -1,0 +1,655 @@
+/**
+ * UI primitives — all referenced components live here in one module.
+ *
+ * Bundled rather than scattered because every component is small and they
+ * share styling tokens; one file keeps colour/spacing consistency easy
+ * to audit. Components are pure (no hooks beyond local state) so they
+ * can render anywhere in the tree.
+ */
+import { ReactNode, useEffect, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Animated,
+  FlatList,
+  Modal,
+  Platform,
+  Pressable,
+  PressableProps,
+  ScrollView,
+  Text,
+  TextInput,
+  TextInputProps,
+  View,
+  ViewProps,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+
+type IconName = keyof typeof Ionicons.glyphMap;
+type Tone = "neutral" | "brand" | "success" | "warning" | "danger" | "info";
+
+const TONE_BG: Record<Tone, string> = {
+  neutral: "bg-page-light dark:bg-page-dark",
+  brand: "bg-brand-soft",
+  success: "bg-success-soft",
+  warning: "bg-warning-soft",
+  danger: "bg-danger-soft",
+  info: "bg-info-soft",
+};
+const TONE_FG: Record<Tone, string> = {
+  neutral: "text-ink-secondary-light dark:text-ink-secondary-dark",
+  brand: "text-brand",
+  success: "text-success",
+  warning: "text-warning",
+  danger: "text-danger",
+  info: "text-info",
+};
+const TONE_ICON_HEX: Record<Tone, string> = {
+  neutral: "#6B7280",
+  brand: "#003B8E",
+  success: "#16A34A",
+  warning: "#D97706",
+  danger: "#DC2626",
+  info: "#2563EB",
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * AppButton
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+type ButtonVariant = "primary" | "outline" | "ghost" | "danger";
+type ButtonSize = "sm" | "md" | "lg";
+
+interface AppButtonProps {
+  label: string;
+  onPress?: () => void;
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  loading?: boolean;
+  disabled?: boolean;
+  fullWidth?: boolean;
+  iconLeft?: IconName;
+  iconRight?: IconName;
+  className?: string;
+}
+
+export function AppButton({
+  label,
+  onPress,
+  variant = "primary",
+  size = "md",
+  loading,
+  disabled,
+  fullWidth,
+  iconLeft,
+  iconRight,
+  className,
+}: AppButtonProps) {
+  const isDisabled = disabled || loading;
+  const baseHeights: Record<ButtonSize, string> = {
+    sm: "h-9 px-4",
+    md: "h-[44px] px-5",
+    lg: "h-[52px] px-6",
+  };
+  const variantClass: Record<ButtonVariant, string> = {
+    primary: "bg-brand active:bg-brand/90",
+    outline: "border border-line-default bg-transparent active:bg-page-light dark:active:bg-page-dark",
+    ghost: "bg-transparent active:bg-page-light dark:active:bg-page-dark",
+    danger: "bg-danger active:bg-danger/90",
+  };
+  const textColor: Record<ButtonVariant, string> = {
+    primary: "text-white",
+    outline: "text-ink-primary-light dark:text-ink-primary-dark",
+    ghost: "text-brand",
+    danger: "text-white",
+  };
+  const iconColor: Record<ButtonVariant, string> = {
+    primary: "#FFFFFF",
+    outline: "#0B1220",
+    ghost: "#003B8E",
+    danger: "#FFFFFF",
+  };
+
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={isDisabled}
+      className={[
+        "flex-row items-center justify-center rounded-md",
+        baseHeights[size],
+        variantClass[variant],
+        fullWidth ? "w-full" : "",
+        isDisabled ? "opacity-50" : "",
+        className ?? "",
+      ].join(" ")}
+    >
+      {loading ? (
+        <ActivityIndicator size="small" color={iconColor[variant]} />
+      ) : (
+        <>
+          {iconLeft ? <Ionicons name={iconLeft} size={18} color={iconColor[variant]} style={{ marginRight: 8 }} /> : null}
+          <Text className={`text-[14px] font-medium ${textColor[variant]}`}>{label}</Text>
+          {iconRight ? <Ionicons name={iconRight} size={18} color={iconColor[variant]} style={{ marginLeft: 8 }} /> : null}
+        </>
+      )}
+    </Pressable>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * AppInput
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+interface AppInputProps extends Omit<TextInputProps, "style"> {
+  label?: string;
+  required?: boolean;
+  helperText?: string;
+  errorText?: string;
+  iconLeft?: IconName;
+  iconRight?: IconName;
+  onPressRightIcon?: () => void;
+  containerClassName?: string;
+}
+
+export function AppInput({
+  label,
+  required,
+  helperText,
+  errorText,
+  iconLeft,
+  iconRight,
+  onPressRightIcon,
+  containerClassName,
+  ...rest
+}: AppInputProps) {
+  const [focused, setFocused] = useState(false);
+  const border = errorText
+    ? "border-danger"
+    : focused
+    ? "border-brand"
+    : "border-line-default";
+  return (
+    <View className={containerClassName}>
+      {label ? (
+        <Text className="text-label uppercase tracking-wider font-medium text-ink-secondary-light dark:text-ink-secondary-dark mb-1.5">
+          {label} {required ? <Text className="text-danger">*</Text> : null}
+        </Text>
+      ) : null}
+      <View
+        className={`flex-row items-center rounded-md border bg-surface-light dark:bg-surface-dark ${border}`}
+        style={{ minHeight: 48 }}
+      >
+        {iconLeft ? (
+          <View className="pl-3 pr-1">
+            <Ionicons name={iconLeft} size={18} color="#6B7280" />
+          </View>
+        ) : null}
+        <TextInput
+          {...rest}
+          onFocus={(e) => { setFocused(true); rest.onFocus?.(e); }}
+          onBlur={(e) => { setFocused(false); rest.onBlur?.(e); }}
+          placeholderTextColor="#9AA3AF"
+          style={{
+            flex: 1,
+            paddingHorizontal: iconLeft ? 6 : 12,
+            paddingVertical: Platform.OS === "ios" ? 12 : 8,
+            fontSize: 15,
+            color: "#0B1220",
+          }}
+        />
+        {iconRight ? (
+          <Pressable onPress={onPressRightIcon} hitSlop={6} className="pr-3 pl-1">
+            <Ionicons name={iconRight} size={18} color="#6B7280" />
+          </Pressable>
+        ) : null}
+      </View>
+      {errorText ? (
+        <Text className="text-helper text-danger mt-1">{errorText}</Text>
+      ) : helperText ? (
+        <Text className="text-helper text-ink-tertiary-light dark:text-ink-tertiary-dark mt-1">
+          {helperText}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * AppDropdown
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+interface DropdownOption {
+  value: string;
+  label: string;
+}
+interface AppDropdownProps {
+  value: string;
+  options: DropdownOption[];
+  onChange: (value: string) => void;
+  placeholder?: string;
+  disabled?: boolean;
+}
+
+export function AppDropdown({ value, options, onChange, placeholder, disabled }: AppDropdownProps) {
+  const [open, setOpen] = useState(false);
+  const selected = options.find((o) => o.value === value);
+  return (
+    <>
+      <Pressable
+        onPress={() => !disabled && setOpen(true)}
+        className={`flex-row items-center rounded-md border border-line-default bg-surface-light dark:bg-surface-dark px-3 ${disabled ? "opacity-60" : ""}`}
+        style={{ minHeight: 48 }}
+      >
+        <Text
+          className={`flex-1 text-body ${selected ? "text-ink-primary-light dark:text-ink-primary-dark" : "text-ink-disabled-light"}`}
+          numberOfLines={1}
+        >
+          {selected ? selected.label : placeholder ?? "Select…"}
+        </Text>
+        <Ionicons name="chevron-down" size={18} color="#6B7280" />
+      </Pressable>
+
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <Pressable onPress={() => setOpen(false)} className="flex-1 bg-black/40 justify-end">
+          <Pressable
+            onPress={() => undefined}
+            className="bg-sheet-light dark:bg-sheet-dark rounded-t-3xl max-h-[70%] pb-7"
+          >
+            <View className="items-center pt-2 pb-1">
+              <View className="w-9 h-1 rounded-full bg-line-default" />
+            </View>
+            <Text className="text-h3 font-medium text-ink-primary-light dark:text-ink-primary-dark px-5 py-3">
+              {placeholder ?? "Select"}
+            </Text>
+            <ScrollView className="px-2.5">
+              {options.map((o) => {
+                const active = o.value === value;
+                return (
+                  <Pressable
+                    key={o.value}
+                    onPress={() => { onChange(o.value); setOpen(false); }}
+                    className={`flex-row items-center justify-between rounded-md px-3 ${active ? "bg-brand-soft" : ""}`}
+                    style={{ minHeight: 48 }}
+                  >
+                    <Text
+                      className={`text-body ${active ? "text-brand font-medium" : "text-ink-primary-light dark:text-ink-primary-dark"}`}
+                    >
+                      {o.label}
+                    </Text>
+                    {active ? <Ionicons name="checkmark" size={18} color="#003B8E" /> : null}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * AppCard, SectionLabel, ListRow
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+interface AppCardProps extends ViewProps {
+  padded?: boolean;
+  className?: string;
+}
+export function AppCard({ children, padded = true, className, ...rest }: AppCardProps) {
+  return (
+    <View
+      {...rest}
+      className={[
+        "bg-surface-light dark:bg-surface-dark rounded-xl border border-line-subtle",
+        padded ? "p-3.5" : "",
+        className ?? "",
+      ].join(" ")}
+    >
+      {children}
+    </View>
+  );
+}
+
+export function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <Text className="text-label uppercase tracking-wider font-medium text-ink-secondary-light dark:text-ink-secondary-dark mb-2 mt-1">
+      {children}
+    </Text>
+  );
+}
+
+interface ListRowProps {
+  icon?: IconName;
+  iconTone?: Tone;
+  title: string;
+  subtitle?: string;
+  rightText?: string;
+  showChevron?: boolean;
+  onPress?: () => void;
+}
+export function ListRow({
+  icon, iconTone = "neutral", title, subtitle, rightText, showChevron = true, onPress,
+}: ListRowProps) {
+  const content = (
+    <View className="flex-row items-center px-3.5 py-3">
+      {icon ? (
+        <View className={`w-9 h-9 rounded-full items-center justify-center ${TONE_BG[iconTone]}`}>
+          <Ionicons name={icon} size={18} color={TONE_ICON_HEX[iconTone]} />
+        </View>
+      ) : null}
+      <View className="flex-1 ml-3">
+        <Text className="text-[13px] font-medium text-ink-primary-light dark:text-ink-primary-dark">
+          {title}
+        </Text>
+        {subtitle ? (
+          <Text className="text-caption text-ink-tertiary-light dark:text-ink-tertiary-dark mt-0.5" numberOfLines={2}>
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
+      {rightText ? (
+        <Text className="text-caption text-ink-tertiary-light dark:text-ink-tertiary-dark mr-1">{rightText}</Text>
+      ) : null}
+      {showChevron && onPress ? <Ionicons name="chevron-forward" size={18} color="#9AA3AF" /> : null}
+    </View>
+  );
+  return onPress ? <Pressable onPress={onPress} className="active:bg-page-light dark:active:bg-page-dark">{content}</Pressable> : content;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Tag, Banner, Avatar, PulseDot, Spinner, EmptyState, Toast, KpiCard, StatusBadge
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+interface TagProps {
+  label: string;
+  tone?: Tone;
+  icon?: IconName;
+}
+export function Tag({ label, tone = "neutral", icon }: TagProps) {
+  return (
+    <View className={`flex-row items-center px-2 py-1 rounded-full self-start ${TONE_BG[tone]}`}>
+      {icon ? <Ionicons name={icon} size={12} color={TONE_ICON_HEX[tone]} style={{ marginRight: 4 }} /> : null}
+      <Text className={`text-[11px] font-medium ${TONE_FG[tone]}`}>{label}</Text>
+    </View>
+  );
+}
+
+interface BannerProps {
+  tone: Tone;
+  title: string;
+  message?: string;
+  icon?: IconName;
+  className?: string;
+}
+export function Banner({ tone, title, message, icon, className }: BannerProps) {
+  return (
+    <View className={`rounded-lg p-3 ${TONE_BG[tone]} ${className ?? ""}`}>
+      <View className="flex-row items-start">
+        {icon ? <Ionicons name={icon} size={18} color={TONE_ICON_HEX[tone]} style={{ marginRight: 8 }} /> : null}
+        <View className="flex-1">
+          <Text className={`text-[13px] font-medium ${TONE_FG[tone]}`}>{title}</Text>
+          {message ? <Text className={`text-caption ${TONE_FG[tone]} opacity-90 mt-0.5`}>{message}</Text> : null}
+        </View>
+      </View>
+    </View>
+  );
+}
+
+interface AvatarProps {
+  name: string;
+  tone?: Tone;
+  size?: "sm" | "md" | "lg" | "xl";
+  url?: string;
+}
+export function Avatar({ name, tone = "brand", size = "md", url }: AvatarProps) {
+  const dims = { sm: 28, md: 36, lg: 48, xl: 64 }[size];
+  const fs = { sm: 11, md: 13, lg: 16, xl: 22 }[size];
+  const initials = name.split(" ").map((s) => s[0]).filter(Boolean).slice(0, 2).join("").toUpperCase();
+  return (
+    <View
+      className={`rounded-full items-center justify-center ${TONE_BG[tone]}`}
+      style={{ width: dims, height: dims }}
+    >
+      <Text className={`font-medium ${TONE_FG[tone]}`} style={{ fontSize: fs }}>
+        {initials || "?"}
+      </Text>
+    </View>
+  );
+}
+
+export function PulseDot({ tone = "success" }: { tone?: Tone }) {
+  const scale = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(scale, { toValue: 1.4, duration: 800, useNativeDriver: true }),
+        Animated.timing(scale, { toValue: 1, duration: 800, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [scale]);
+  const color = TONE_ICON_HEX[tone];
+  return (
+    <View className="w-2 h-2 items-center justify-center">
+      <Animated.View
+        style={{
+          position: "absolute",
+          width: 8, height: 8, borderRadius: 4,
+          backgroundColor: color, opacity: 0.4, transform: [{ scale }],
+        }}
+      />
+      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />
+    </View>
+  );
+}
+
+export function Spinner({ label }: { label?: string }) {
+  return (
+    <View className="flex-1 items-center justify-center py-10">
+      <ActivityIndicator size="large" color="#003B8E" />
+      {label ? <Text className="text-helper text-ink-tertiary-light mt-3">{label}</Text> : null}
+    </View>
+  );
+}
+
+interface EmptyStateProps {
+  icon: IconName;
+  title: string;
+  message?: string;
+  action?: { label: string; onPress: () => void };
+}
+export function EmptyState({ icon, title, message, action }: EmptyStateProps) {
+  return (
+    <View className="items-center justify-center py-12 px-6">
+      <View className="w-16 h-16 rounded-full bg-brand-soft items-center justify-center mb-3">
+        <Ionicons name={icon} size={28} color="#003B8E" />
+      </View>
+      <Text className="text-h3 font-medium text-ink-primary-light dark:text-ink-primary-dark text-center">{title}</Text>
+      {message ? (
+        <Text className="text-helper text-ink-tertiary-light dark:text-ink-tertiary-dark mt-1 text-center max-w-[280px]">
+          {message}
+        </Text>
+      ) : null}
+      {action ? (
+        <View className="mt-4">
+          <AppButton label={action.label} onPress={action.onPress} variant="outline" />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+/** Auto-dismissing toast notification. Mount once near the screen root. */
+interface ToastProps {
+  visible: boolean;
+  title: string;
+  message?: string;
+  tone?: Tone;
+  onHide: () => void;
+  duration?: number;
+}
+export function Toast({ visible, title, message, tone = "success", onHide, duration = 2400 }: ToastProps) {
+  const translateY = useRef(new Animated.Value(80)).current;
+  useEffect(() => {
+    if (!visible) return;
+    Animated.spring(translateY, { toValue: 0, useNativeDriver: true, friction: 8 }).start();
+    const t = setTimeout(() => {
+      Animated.timing(translateY, { toValue: 80, duration: 200, useNativeDriver: true })
+        .start(() => onHide());
+    }, duration);
+    return () => clearTimeout(t);
+  }, [visible, translateY, duration, onHide]);
+  if (!visible) return null;
+  return (
+    <Animated.View
+      style={{ position: "absolute", bottom: 28, left: 14, right: 14, transform: [{ translateY }] }}
+    >
+      <View className={`rounded-md p-3 flex-row items-start ${TONE_BG[tone]}`}>
+        <Ionicons
+          name={tone === "success" ? "checkmark-circle" : tone === "danger" ? "alert-circle" : "information-circle"}
+          size={18}
+          color={TONE_ICON_HEX[tone]}
+        />
+        <View className="flex-1 ml-2">
+          <Text className={`text-[13px] font-medium ${TONE_FG[tone]}`}>{title}</Text>
+          {message ? <Text className={`text-caption mt-0.5 ${TONE_FG[tone]} opacity-90`}>{message}</Text> : null}
+        </View>
+      </View>
+    </Animated.View>
+  );
+}
+
+interface KpiCardProps {
+  label: string;
+  value: string | number;
+  tone?: Tone;
+  icon?: IconName;
+  onPress?: () => void;
+}
+export function KpiCard({ label, value, tone = "brand", icon, onPress }: KpiCardProps) {
+  const C = onPress ? Pressable : View;
+  return (
+    <C onPress={onPress} className="flex-1">
+      <View className="bg-surface-light dark:bg-surface-dark rounded-xl border border-line-subtle p-3">
+        <View className="flex-row items-center justify-between">
+          <Text className="text-label uppercase tracking-wider font-medium text-ink-tertiary-light">
+            {label}
+          </Text>
+          {icon ? (
+            <View className={`w-7 h-7 rounded-full items-center justify-center ${TONE_BG[tone]}`}>
+              <Ionicons name={icon} size={14} color={TONE_ICON_HEX[tone]} />
+            </View>
+          ) : null}
+        </View>
+        <Text className="text-h1 font-medium text-ink-primary-light dark:text-ink-primary-dark mt-1.5">
+          {value}
+        </Text>
+      </View>
+    </C>
+  );
+}
+
+interface StatusBadgeProps {
+  status: "draft" | "submitted" | "approved" | "rejected" | "pending";
+}
+export function StatusBadge({ status }: StatusBadgeProps) {
+  const map: Record<StatusBadgeProps["status"], { tone: Tone; label: string; icon: IconName }> = {
+    draft: { tone: "neutral", label: "Draft", icon: "create-outline" },
+    submitted: { tone: "info", label: "Submitted", icon: "cloud-upload-outline" },
+    approved: { tone: "success", label: "Approved", icon: "checkmark-circle" },
+    rejected: { tone: "danger", label: "Rejected", icon: "close-circle" },
+    pending: { tone: "warning", label: "Pending", icon: "time-outline" },
+  };
+  const m = map[status];
+  return <Tag label={m.label} tone={m.tone} icon={m.icon} />;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * RadioGroup
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+interface RadioItem<T extends string> {
+  value: T;
+  label: string;
+  helper?: string;
+}
+interface RadioGroupProps<T extends string> {
+  items: RadioItem<T>[];
+  value: T;
+  onChange: (v: T) => void;
+}
+export function RadioGroup<T extends string>({ items, value, onChange }: RadioGroupProps<T>) {
+  return (
+    <View>
+      {items.map((it, idx) => {
+        const active = it.value === value;
+        return (
+          <Pressable
+            key={it.value}
+            onPress={() => onChange(it.value)}
+            className={`flex-row items-start p-3 rounded-md border ${active ? "border-brand bg-brand-soft" : "border-line-default bg-surface-light dark:bg-surface-dark"} ${idx > 0 ? "mt-2" : ""}`}
+          >
+            <View
+              className={`w-5 h-5 rounded-full border-2 items-center justify-center mt-0.5 ${active ? "border-brand" : "border-line-default"}`}
+            >
+              {active ? <View className="w-2.5 h-2.5 rounded-full bg-brand" /> : null}
+            </View>
+            <View className="flex-1 ml-3">
+              <Text className={`text-[14px] font-medium ${active ? "text-brand" : "text-ink-primary-light dark:text-ink-primary-dark"}`}>
+                {it.label}
+              </Text>
+              {it.helper ? (
+                <Text className="text-helper text-ink-tertiary-light dark:text-ink-tertiary-dark mt-0.5">
+                  {it.helper}
+                </Text>
+              ) : null}
+            </View>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * SurveyCard — list item used on surveys list + dashboard
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+interface SurveyCardProps {
+  propertyNo: string;
+  ownerName: string;
+  wardNo: string;
+  status: StatusBadgeProps["status"];
+  qcStatus?: "pending" | "approved" | "rejected";
+  updatedAt: number;
+  onPress: () => void;
+}
+export function SurveyCard({ propertyNo, ownerName, wardNo, status, qcStatus, updatedAt, onPress }: SurveyCardProps) {
+  return (
+    <Pressable
+      onPress={onPress}
+      className="p-3.5 bg-surface-light dark:bg-surface-dark rounded-xl border border-line-subtle active:opacity-90"
+    >
+      <View className="flex-row items-start">
+        <View className="w-10 h-10 rounded-md bg-brand-soft items-center justify-center">
+          <Ionicons name="home-outline" size={20} color="#003B8E" />
+        </View>
+        <View className="flex-1 ml-3">
+          <Text className="text-[13px] font-medium text-ink-primary-light dark:text-ink-primary-dark">
+            {propertyNo}
+          </Text>
+          <Text className="text-caption text-ink-tertiary-light dark:text-ink-tertiary-dark mt-0.5" numberOfLines={1}>
+            {ownerName}
+          </Text>
+          <View className="flex-row gap-1.5 mt-2 items-center">
+            <Tag label={`Ward ${wardNo}`} tone="neutral" icon="map-outline" />
+            <StatusBadge status={status} />
+            {qcStatus === "rejected" ? <Tag label="QC: rejected" tone="danger" icon="alert" /> : null}
+          </View>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color="#9AA3AF" />
+      </View>
+    </Pressable>
+  );
+}

@@ -13,9 +13,9 @@
 import { ConvexError, v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type {
-  ActionCtx,
-  MutationCtx,
-  QueryCtx,
+    ActionCtx,
+    MutationCtx,
+    QueryCtx,
 } from "./_generated/server";
 
 export type AnyCtx = QueryCtx | MutationCtx | ActionCtx;
@@ -45,8 +45,8 @@ export async function requireIdentity(ctx: AnyCtx): Promise<Identity> {
 }
 
 /**
- * Load the calling user's domain row. Throws if not yet provisioned (the
- * Clerk webhook should have created it) or if the account isn't approved.
+ * Load the calling user's domain row. Throws if not yet provisioned (webhook
+ * or `users.provisionCurrentUser` from the setup screen) or if not approved.
  *
  * Pass `{ allowPending: true }` for screens that need to show "awaiting
  * approval" UI to a freshly-signed-up user.

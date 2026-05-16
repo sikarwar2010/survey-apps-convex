@@ -12,11 +12,14 @@ export function fieldError<T extends object>(
 
 type ClerkApiError = { errors?: { longMessage?: string; message?: string }[] };
 
-/** Message from a Clerk API error thrown by legacy sign-in/sign-up flows. */
+/** Message from a Clerk API error (Core 3 `{ error }` returns or thrown legacy errors). */
 export function clerkErrorMessage(err: unknown, fallback = "Something went wrong"): string {
   if (err && typeof err === "object" && "errors" in err) {
     const first = (err as ClerkApiError).errors?.[0];
-    return first?.longMessage ?? first?.message ?? fallback;
+    if (first?.longMessage ?? first?.message) return first.longMessage ?? first.message!;
+  }
+  if (err && typeof err === "object" && "message" in err && typeof (err as { message: unknown }).message === "string") {
+    return (err as { message: string }).message;
   }
   if (err instanceof Error) return err.message;
   return fallback;
