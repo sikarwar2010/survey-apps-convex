@@ -30,6 +30,7 @@ import { useEffect } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import "./global.css"
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 

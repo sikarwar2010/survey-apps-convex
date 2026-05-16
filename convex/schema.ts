@@ -1,0 +1,301 @@
+/**
+ * Convex schema for the Property Survey platform.
+ *
+ * Tables and their indexes are designed for the access patterns the mobile
+ * app and admin web actually use — every reactive query you'll see in
+ * convex/*.ts uses one of the indexes below. Convex enforces that lookups
+ * not covered by an index are scans, so the indexes are non-negotiable.
+ *
+ * Field names match the mobile DTO surface (`src/types/api.ts` from the
+ * prior build). Anything renamed here would force a mobile-side rename too.
+ */
+import { defineSchema, defineTable } from "convex/server";
+import { v } from "convex/values";
+
+/* ────────────────────────── reusable validators ────────────────────────── */
+
+export const userRole = v.union(
+  v.literal("pending"),
+  v.literal("surveyor"),
+  v.literal("supervisor"),
+  v.literal("admin"),
+);
+
+export const userStatus = v.union(
+  v.literal("pending_approval"),
+  v.literal("active"),
+  v.literal("disabled"),
+);
+
+export const surveyStatus = v.union(
+  v.literal("draft"),
+  v.literal("submitted"),
+  v.literal("approved"),
+  v.literal("rejected"),
+);
+
+export const qcStatus = v.union(
+  v.literal("pending"),
+  v.literal("approved"),
+  v.literal("rejected"),
+);
+
+export const photoSlot = v.union(
+  v.literal("front"),
+  v.literal("side"),
+);
+
+export const gpsCapture = v.object({
+  latitude: v.number(),
+  longitude: v.number(),
+  accuracyMeters: v.number(),
+  capturedAt: v.number(),
+  provider: v.optional(v.string()),
+  isMockLocation: v.optional(v.boolean()),
+});
+
+/* ────────────────────────── schema ────────────────────────── */
+
+export default defineSchema({
+  /**
+   * users — bridge between Clerk identities and our domain.
+   *
+   * Created via the Clerk webhook in `convex/http.ts` whenever someone
+   * signs up. New users land in `status: 'pending_approval'` and
+   * `role: 'pending'`; an admin promotes them via `admin.approveUser`.
+   *
+   * Every Convex function authenticates the caller via Clerk JWT and then
+   * looks up this row to enforce role/tenancy. Never trust client-supplied
+   * userIds — always derive from `ctx.auth.getUserIdentity()`.
+   */
+  users: defineTable({
+    clerkId: v.string(),                          // identifier from Clerk's `subject`
+    email: v.string(),
+    name: v.string(),
+    avatarUrl: v.optional(v.string()),
+
+    role: userRole,
+    status: userStatus,
+    municipalityId: v.optional(v.id("municipalities")),
+    wardAssignments: v.array(v.string()),         // ward_no list ("12", "14A")
+
+    requestedRole: v.optional(v.string()),        // what the user asked for at sign-up
+    requestedReason: v.optional(v.string()),
+
+    approvedBy: v.optional(v.id("users")),
+    approvedAt: v.optional(v.number()),
+    disabledBy: v.optional(v.id("users")),
+    disabledAt: v.optional(v.number()),
+
+    lastSeenAt: v.optional(v.number()),
+  })
+    .index("by_clerkId", ["clerkId"])
+    .index("by_status", ["status"])
+    .index("by_role_status", ["role", "status"])
+    .index("by_municipality", ["municipalityId"]),
+
+  /**
+   * Tenants — districts → municipalities → wards.
+   * Seeded by `convex/seed.ts` for dev; populate via admin actions in prod.
+   */
+  districts: defineTable({
+    code: v.string(),
+    name: v.string(),
+    stateName: v.string(),
+  }).index("by_code", ["code"]),
+
+  municipalities: defineTable({
+    code: v.string(),
+    name: v.string(),
+    bodyType: v.string(),                         // nagar_panchayat | nagar_palika | mahanagar
+    districtId: v.id("districts"),
+  })
+    .index("by_code", ["code"])
+    .index("by_district", ["districtId"]),
+
+  wards: defineTable({
+    municipalityId: v.id("municipalities"),
+    wardNo: v.string(),
+    name: v.string(),
+  }).index("by_municipality_ward", ["municipalityId", "wardNo"]),
+
+  /**
+   * surveys — the main entity.
+   *
+   * `localId` is the idempotency key: the mobile app generates it before
+   * the first sync, and re-sending the same payload upserts into the same
+   * row. The `by_surveyor_localId` unique-ish index makes this O(1).
+   *
+   * Floors and photos live in separate tables for normalisation, but the
+   * GPS object is inline because it's strictly 1:1 and queried with the
+   * survey 100% of the time.
+   *
+   * `serverVersion` increments on every server-side write — the mobile
+   * uses it to detect "this survey changed under me, re-fetch".
+   */
+  surveys: defineTable({
+    localId: v.string(),
+    surveyorId: v.id("users"),
+    municipalityId: v.id("municipalities"),
+    wardNo: v.string(),
+
+    status: surveyStatus,
+    qcStatus: qcStatus,
+    serverVersion: v.number(),
+    clientUpdatedAt: v.number(),
+    submittedAt: v.optional(v.number()),
+
+    // Section 1 — Property
+    propertyNo: v.string(),
+    isSlum: v.boolean(),
+
+    // Section 2 — Owner
+    ownerName: v.string(),
+    respondentName: v.string(),
+    relationship: v.string(),
+    mobileNo: v.string(),
+    familySize: v.number(),
+
+    // Section 3 — Address
+    houseNo: v.string(),
+    street: v.string(),
+    locality: v.optional(v.string()),
+    city: v.string(),
+    pinCode: v.string(),
+
+    // Section 4 — Taxation
+    assessmentYear: v.string(),
+    ownershipType: v.string(),
+    propertyType: v.string(),
+    propertyUse: v.string(),
+    situation: v.string(),
+    roadType: v.string(),
+    taxRateZone: v.string(),
+    plotSqft: v.number(),
+    plinthSqft: v.number(),
+
+    // Section 6 — Services
+    waterSource: v.string(),
+    sanitationType: v.string(),
+    solidWasteType: v.string(),
+    electricityNo: v.optional(v.string()),
+
+    // Section 7 — GIS (inline)
+    gps: v.optional(gpsCapture),
+  })
+    .index("by_surveyor_localId", ["surveyorId", "localId"])     // idempotency lookup
+    .index("by_surveyor", ["surveyorId"])
+    .index("by_status", ["status"])
+    .index("by_qc_status", ["qcStatus"])
+    .index("by_municipality_ward", ["municipalityId", "wardNo"])
+    .index("by_municipality_status", ["municipalityId", "status"]),
+
+  /** floors — 1:N to a survey; ordered by `position`. */
+  floors: defineTable({
+    surveyId: v.id("surveys"),
+    clientFloorId: v.string(),                    // client-generated id; idempotency
+    position: v.number(),
+    floorName: v.string(),
+    usageType: v.string(),
+    constructionType: v.string(),
+    isOccupied: v.boolean(),
+    areaSqft: v.number(),
+  })
+    .index("by_survey", ["surveyId"])
+    .index("by_survey_clientFloorId", ["surveyId", "clientFloorId"]),
+
+  /**
+   * photos — pointers to Convex file storage. The actual JPEG bytes live in
+   * `_storage` (managed by Convex); `storageId` is the reference.
+   *
+   * Upload flow:
+   *   1. mobile calls `photos.generateUploadUrl` (Convex returns a signed POST URL)
+   *   2. mobile POSTs the compressed image bytes to that URL
+   *   3. mobile calls `photos.linkPhoto` with the resulting storageId
+   */
+  photos: defineTable({
+    surveyId: v.id("surveys"),
+    slot: photoSlot,
+    storageId: v.id("_storage"),
+    sizeKb: v.number(),
+    width: v.optional(v.number()),
+    height: v.optional(v.number()),
+    capturedAt: v.number(),
+    uploadedBy: v.id("users"),
+  })
+    .index("by_survey", ["surveyId"])
+    .index("by_survey_slot", ["surveyId", "slot"]),
+
+  /**
+   * qcRemarks — chat-style thread between supervisor and surveyor.
+   * Append-only; resolution is tracked on the parent survey + qcDecisions row.
+   */
+  qcRemarks: defineTable({
+    surveyId: v.id("surveys"),
+    authorId: v.id("users"),
+    authorRole: v.string(),                       // snapshot at write-time
+    message: v.string(),
+    taggedSections: v.array(v.string()),
+    status: v.union(v.literal("open"), v.literal("resolved")),
+  })
+    .index("by_survey", ["surveyId"]),
+
+  /** qcDecisions — formal approve/reject events. One row per decision. */
+  qcDecisions: defineTable({
+    surveyId: v.id("surveys"),
+    reviewerId: v.id("users"),
+    decision: v.union(v.literal("approve"), v.literal("reject")),
+    comment: v.optional(v.string()),
+    taggedSections: v.array(v.string()),
+    decidedAt: v.number(),
+  }).index("by_survey", ["surveyId"]),
+
+  /**
+   * masters — every dropdown the mobile shows. Categorised so the bundle
+   * query in `masters.bundle` can return them grouped.
+   */
+  masters: defineTable({
+    category: v.string(),                         // assessment_year, ownership_type, …
+    value: v.string(),
+    label: v.string(),
+    position: v.number(),
+    isActive: v.boolean(),
+  })
+    .index("by_category_position", ["category", "isActive", "position"])
+    .index("by_category_value", ["category", "value"]),
+
+  /**
+   * auditLogs — append-only trail for compliance.
+   *
+   * Convex doesn't have row-level immutability primitives, but we enforce
+   * write-only access in code: only `helpers.audit.write` (called from
+   * server-side mutations) inserts here; no public mutation exposes
+   * update or delete. UI reads through `audit.list`.
+   */
+  auditLogs: defineTable({
+    actorId: v.optional(v.id("users")),
+    action: v.string(),                           // user.approved, survey.submitted, qc.rejected, …
+    entity: v.string(),                           // user | survey | qc | masters | …
+    entityId: v.optional(v.string()),
+    metadata: v.optional(v.any()),                // JSON snapshot — before/after, IP, etc.
+  })
+    .index("by_entity", ["entity", "entityId"])
+    .index("by_actor", ["actorId"]),
+
+  /**
+   * notifications — destined for the mobile bell icon + in-app banners.
+   * `readAt` is null when unread; index includes it so the unread badge
+   * count is a fast index scan.
+   */
+  notifications: defineTable({
+    userId: v.id("users"),
+    type: v.string(),                             // qc_rejected, qc_approved, account_approved, …
+    title: v.string(),
+    body: v.string(),
+    relatedEntity: v.optional(v.string()),
+    relatedId: v.optional(v.string()),
+    readAt: v.optional(v.number()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_read", ["userId", "readAt"]),
+});

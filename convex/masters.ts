@@ -1,0 +1,190 @@
+/**
+ * Master data + bundles. The mobile app calls `bundle` once on app start
+ * (and then relies on Convex's reactive cache to push updates).
+ */
+import { v } from "convex/values";
+import { mutation, query } from "./_generated/server";
+import { requireUser } from "./helpers";
+
+interface Option {
+  value: string;
+  label: string;
+}
+
+/**
+ * Returns every active dropdown grouped by category, plus the full set of
+ * municipalities and wards the caller has any read access to. The mobile
+ * uses this as the single source of truth for every dropdown menu.
+ */
+export const bundle = query({
+  args: {},
+  handler: async (ctx) => {
+    const me = await requireUser(ctx, { allowPending: true });
+
+    // Dropdown masters — by_category_position index for grouped iteration
+    const masters = await ctx.db
+      .query("masters")
+      .filter((q) => q.eq(q.field("isActive"), true))
+      .collect();
+    const groupedRaw: Record<string, Option[]> = {};
+    for (const m of masters.sort((a, b) => a.position - b.position)) {
+      groupedRaw[m.category] = groupedRaw[m.category] ?? [];
+      groupedRaw[m.category]!.push({ value: m.value, label: m.label });
+    }
+    const grouped = groupedRaw;
+
+    // Tenants the user can see — admin sees all, others see their own ULB only
+    const municipalitiesAll = await ctx.db.query("municipalities").collect();
+    const visibleMunis =
+      me.role === "admin" || !me.municipalityId
+        ? municipalitiesAll
+        : municipalitiesAll.filter((m) => m._id === me.municipalityId);
+
+    const districts = await ctx.db.query("districts").collect();
+    const districtsById = new Map(districts.map((d) => [d._id, d]));
+
+    const ulbs = visibleMunis.map((m) => {
+      const d = districtsById.get(m.districtId);
+      return {
+        _id: m._id,
+        code: m.code,
+        name: m.name,
+        bodyType: m.bodyType,
+        districtName: d?.name ?? "",
+        stateName: d?.stateName ?? "",
+      };
+    });
+
+    const wards = await ctx.db.query("wards").collect();
+    const wardsForUser = wards.filter((w) =>
+      visibleMunis.some((m) => m._id === w.municipalityId),
+    );
+    const muniById = new Map(visibleMunis.map((m) => [m._id, m]));
+    const wardOut = wardsForUser.map((w) => ({
+      _id: w._id,
+      municipalityCode: muniById.get(w.municipalityId)?.code ?? "",
+      wardNo: w.wardNo,
+      name: w.name,
+    }));
+
+    return {
+      updatedAt: Date.now(),
+      ulbs,
+      wards: wardOut,
+      // Each category is optional in case it isn't seeded yet on a fresh deployment.
+      assessmentYears: grouped["assessment_year"] ?? [],
+      ownershipTypes: grouped["ownership_type"] ?? [],
+      propertyTypes: grouped["property_type"] ?? [],
+      propertyUses: grouped["property_use"] ?? [],
+      situations: grouped["situation"] ?? [],
+      roadTypes: grouped["road_type"] ?? [],
+      taxRateZones: grouped["tax_rate_zone"] ?? [],
+      relationships: grouped["relationship"] ?? [],
+      waterSources: grouped["water_source"] ?? [],
+      sanitationTypes: grouped["sanitation_type"] ?? [],
+      solidWasteTypes: grouped["solid_waste_type"] ?? [],
+      usageTypes: grouped["usage_type"] ?? [],
+      constructionTypes: grouped["construction_type"] ?? [],
+      floors: grouped["floor_name"] ?? [],
+    };
+  },
+});
+
+/* ────────────────────────── notifications ────────────────────────── */
+
+export const listNotifications = query({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const me = await requireUser(ctx);
+    const limit = Math.min(args.limit ?? 30, 100);
+    return await ctx.db
+      .query("notifications")
+      .withIndex("by_user", (q) => q.eq("userId", me._id))
+      .order("desc")
+      .take(limit);
+  },
+});
+
+export const unreadCount = query({
+  args: {},
+  handler: async (ctx) => {
+    const me = await requireUser(ctx, { allowPending: true });
+    const rows = await ctx.db
+      .query("notifications")
+      .withIndex("by_user_read", (q) =>
+        q.eq("userId", me._id).eq("readAt", undefined))
+      .collect();
+    return rows.length;
+  },
+});
+
+export const markRead = mutation({
+  args: { id: v.id("notifications") },
+  handler: async (ctx, args) => {
+    const me = await requireUser(ctx);
+    const n = await ctx.db.get(args.id);
+    if (!n || n.userId !== me._id) return;
+    if (n.readAt) return;
+    await ctx.db.patch(args.id, { readAt: Date.now() });
+  },
+});
+
+export const markAllRead = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const me = await requireUser(ctx);
+    const unread = await ctx.db
+      .query("notifications")
+      .withIndex("by_user_read", (q) =>
+        q.eq("userId", me._id).eq("readAt", undefined))
+      .collect();
+    const now = Date.now();
+    for (const n of unread) {
+      await ctx.db.patch(n._id, { readAt: now });
+    }
+  },
+});
+
+/* ────────────────────────── dashboard ────────────────────────── */
+
+/**
+ * Quick KPI counts for the home screen. Scoped to whatever the caller
+ * can see — surveyor sees own, supervisor sees ULB, admin sees all.
+ */
+export const dashboardCounts = query({
+  args: {},
+  handler: async (ctx) => {
+    const me = await requireUser(ctx, { allowPending: true });
+    if (me.status !== "active") {
+      return { total: 0, today: 0, drafts: 0, submitted: 0, approved: 0, rejected: 0 };
+    }
+
+    let rows;
+    if (me.role === "surveyor") {
+      rows = await ctx.db
+        .query("surveys")
+        .withIndex("by_surveyor", (q) => q.eq("surveyorId", me._id))
+        .collect();
+    } else if (me.role === "supervisor" && me.municipalityId) {
+      rows = await ctx.db
+        .query("surveys")
+        .withIndex("by_municipality_ward", (q) => q.eq("municipalityId", me.municipalityId!))
+        .collect();
+    } else {
+      rows = await ctx.db.query("surveys").collect();
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayMs = today.getTime();
+
+    return {
+      total: rows.length,
+      today: rows.filter((r) => r._creationTime >= todayMs).length,
+      drafts: rows.filter((r) => r.status === "draft").length,
+      submitted: rows.filter((r) => r.status === "submitted").length,
+      approved: rows.filter((r) => r.status === "approved").length,
+      rejected: rows.filter((r) => r.status === "rejected").length,
+    };
+  },
+});
