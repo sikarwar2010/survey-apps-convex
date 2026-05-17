@@ -5,7 +5,7 @@ import { AppButton, AppCard, AppInput, Banner, Spinner, Tag, Toast } from '@/com
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
 import { toUserMessage } from '@/utils/errors';
-import { timeAgo } from '@/utils/format';
+import { formatSurveyParcelLabel, timeAgo } from '@/utils/format';
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery } from 'convex/react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -73,7 +73,7 @@ export default function QcConversationScreen() {
           <View className="flex-1 ml-1">
             <Text className="text-helper text-white/75">QC conversation</Text>
             <Text className="text-h3 font-medium text-white" numberOfLines={1}>
-              {survey.propertyNo}
+              {formatSurveyParcelLabel(survey.parcelNo, survey.unitNo)}
             </Text>
           </View>
         </View>

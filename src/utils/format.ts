@@ -35,6 +35,34 @@ export function humanizeRole(role?: string): string {
   return capitalize(role.replace(/_/g, ' '));
 }
 
+/** Primary label for a survey in lists and headers (parcel + unit). */
+export function formatSurveyParcelLabel(parcelNo: string, unitNo: string): string {
+  const parcel = parcelNo.trim();
+  const unit = unitNo.trim();
+  if (parcel && unit) return `${parcel} · Unit ${unit}`;
+  return parcel || unit || '—';
+}
+
+/** Indian mobile: 10 digits, first digit 6–9. */
+export const INDIAN_MOBILE_RE = /^[6-9]\d{9}$/;
+
+export function isValidIndianMobile(value: string): boolean {
+  return INDIAN_MOBILE_RE.test(value);
+}
+
+export function sanitizeMobileDigits(raw: string, maxLen = 10): string {
+  return raw.replace(/\D/g, '').slice(0, maxLen);
+}
+
+export type SurveyOwnerRow = { name?: string; fatherOrHusbandName?: string };
+
+/** Primary line for survey cards (first owner name, else respondent). */
+export function surveyOwnerListLabel(owners?: SurveyOwnerRow[] | null, respondentName?: string | null): string {
+  const names = owners?.map((o) => o.name?.trim()).filter((n): n is string => Boolean(n));
+  if (names?.length) return names.join(', ');
+  return respondentName?.trim() || '—';
+}
+
 export function humanizeUlbBodyType(bodyType?: string): string {
   if (!bodyType) return '—';
   const labels: Record<string, string> = {

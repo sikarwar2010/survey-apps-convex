@@ -15,6 +15,7 @@ import type * as floors from "../floors.js";
 import type * as helpers from "../helpers.js";
 import type * as http from "../http.js";
 import type * as masters from "../masters.js";
+import type * as ownerRules from "../ownerRules.js";
 import type * as photos from "../photos.js";
 import type * as qc from "../qc.js";
 import type * as surveys from "../surveys.js";
@@ -37,6 +38,7 @@ declare const fullApi: ApiFromModules<{
   helpers: typeof helpers;
   http: typeof http;
   masters: typeof masters;
+  ownerRules: typeof ownerRules;
   photos: typeof photos;
   qc: typeof qc;
   surveys: typeof surveys;

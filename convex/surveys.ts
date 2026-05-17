@@ -11,7 +11,8 @@ import { ConvexError, v } from 'convex/values';
 import type { Doc, Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
 import { assertCanReadWard, clientError, requireRole, requireUser, writeAudit } from './helpers';
-import { gpsCapture, qcStatus, surveyStatus } from './schema';
+import { normalizeOwners, validateOwnerSection } from './ownerRules';
+import { gpsCapture, qcStatus, surveyOwnerEntry, surveyStatus } from './schema';
 import { assertMunicipalityInScope, resolveTenantScope, tenantDistrictIds, tenantMunicipalityIds } from './tenancy';
 
 /* ────────────────────────── shared input validator ────────────────────────── */
@@ -21,14 +22,19 @@ const surveyInput = {
   municipalityId: v.id('municipalities'),
   wardNo: v.string(),
 
-  propertyNo: v.string(),
+  sectorNo: v.optional(v.string()),
+  oldPropertyNo: v.optional(v.string()),
+  parcelNo: v.string(),
+  unitNo: v.string(),
+  constructedYear: v.optional(v.number()),
   isSlum: v.boolean(),
 
-  ownerName: v.string(),
-  respondentName: v.string(),
-  relationship: v.string(),
+  respondentName: v.optional(v.string()),
+  relationship: v.optional(v.string()),
+  owners: v.optional(v.array(surveyOwnerEntry)),
+  familySize: v.optional(v.number()),
   mobileNo: v.string(),
-  familySize: v.number(),
+  altMobileNo: v.optional(v.string()),
 
   houseNo: v.string(),
   street: v.string(),
@@ -218,7 +224,8 @@ export const upsert = mutation({
     const muni = await assertMunicipalityInScope(ctx, me, args.municipalityId);
     assertCanReadWard(me, args.municipalityId, args.wardNo);
 
-    validateBusinessRules(args as unknown as typeof surveyInput);
+    const normalized = normalizeOwnerFields(normalizePropertyFields(args));
+    validateBusinessRules(normalized);
 
     // Confirm ward exists within the municipality
     const ward = await ctx.db
@@ -233,7 +240,7 @@ export const upsert = mutation({
       .unique();
 
     const now = Date.now();
-    const writable = { ...stripLocalId(args), districtId: muni.districtId };
+    const writable = { ...stripLocalId(normalized), districtId: muni.districtId };
 
     if (existing) {
       // If the supervisor already approved this row, lock further edits unless
@@ -401,16 +408,60 @@ export const remove = mutation({
 
 /* ────────────────────────── internal ────────────────────────── */
 
+type SurveyUpsertArgs = {
+  sectorNo?: string;
+  oldPropertyNo?: string;
+  parcelNo: string;
+  unitNo: string;
+  constructedYear?: number;
+  [key: string]: unknown;
+};
+
+function normalizePropertyFields<T extends SurveyUpsertArgs>(args: T): T {
+  return {
+    ...args,
+    sectorNo: args.sectorNo?.trim() || undefined,
+    oldPropertyNo: args.oldPropertyNo?.trim() || undefined,
+    parcelNo: args.parcelNo.trim(),
+    unitNo: args.unitNo.trim(),
+    constructedYear: args.constructedYear,
+  };
+}
+
+function normalizeOwnerFields<T extends SurveyUpsertArgs>(args: T): T {
+  const trimOpt = (s?: string) => {
+    const t = s?.trim();
+    return t ? t : undefined;
+  };
+  return {
+    ...args,
+    respondentName: trimOpt(args.respondentName as string | undefined),
+    relationship: trimOpt(args.relationship as string | undefined),
+    owners: normalizeOwners(args.owners as Parameters<typeof normalizeOwners>[0]),
+    altMobileNo: trimOpt(args.altMobileNo as string | undefined),
+    familySize: args.familySize as number | undefined,
+  };
+}
+
 function stripLocalId<T extends { localId: string; surveyorId?: Id<'users'> }>(args: T): Omit<T, 'localId'> {
   const { localId: _l, ...rest } = args;
   return rest;
 }
 
-function validateBusinessRules(in_: typeof surveyInput): void {
+function validateBusinessRules(in_: Record<string, unknown>): void {
   const details: Record<string, string[]> = {};
 
-  if (!/^[6-9]\d{9}$/.test(in_.mobileNo as unknown as string)) {
+  const mobile = String(in_.mobileNo ?? '');
+  if (!/^[6-9]\d{9}$/.test(mobile)) {
     details.mobileNo = ['Enter a valid 10-digit mobile (starts 6-9)'];
+  }
+  const altMobile = in_.altMobileNo as unknown as string | undefined;
+  if (altMobile != null && altMobile.trim() !== '') {
+    if (!/^[6-9]\d{9}$/.test(altMobile)) {
+      details.altMobileNo = ['Enter a valid 10-digit alternate mobile (starts 6-9)'];
+    } else if (altMobile === mobile) {
+      details.altMobileNo = ['Alternate mobile must differ from primary mobile'];
+    }
   }
   if (!/^[1-9]\d{5}$/.test(in_.pinCode as unknown as string)) {
     details.pinCode = ['PIN must be 6 digits, not starting with 0'];
@@ -420,12 +471,36 @@ function validateBusinessRules(in_: typeof surveyInput): void {
   if (typeof plot === 'number' && typeof plinth === 'number' && plinth > plot) {
     details.plinthSqft = ['Plinth area cannot exceed plot area'];
   }
-  if ((in_.familySize as unknown as number) < 1) {
-    details.familySize = ['Family size must be ≥ 1'];
+  const familySize = in_.familySize as unknown as number | undefined;
+  if (familySize != null && (familySize < 1 || !Number.isInteger(familySize))) {
+    details.familySize = ['Family size must be a whole number ≥ 1'];
+  }
+
+  const parcelNo = String(in_.parcelNo ?? '').trim();
+  if (!parcelNo) {
+    details.parcelNo = ['Parcel number is required'];
+  }
+  const unitNo = String(in_.unitNo ?? '').trim();
+  if (!unitNo) {
+    details.unitNo = ['Unit number is required'];
+  }
+  const constructedYear = in_.constructedYear as unknown as number | undefined;
+  if (constructedYear != null) {
+    const currentYear = new Date().getFullYear();
+    if (!Number.isInteger(constructedYear) || constructedYear < 1800 || constructedYear > currentYear) {
+      details.constructedYear = [`Enter a year between 1800 and ${currentYear}`];
+    }
   }
   if (in_.gps && (in_.gps as unknown as { accuracyMeters: number }).accuracyMeters > 500) {
     details.gps = ['GPS accuracy too poor; retake outside'];
   }
+  Object.assign(
+    details,
+    validateOwnerSection({
+      relationship: in_.relationship as string | undefined,
+      owners: in_.owners as Parameters<typeof validateOwnerSection>[0]['owners'],
+    }),
+  );
   if (Object.keys(details).length > 0) {
     throw new ConvexError({
       code: 'VALIDATION',

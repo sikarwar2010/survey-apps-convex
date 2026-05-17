@@ -19,7 +19,7 @@ import { api } from '@/convex/_generated/api';
 import { clearDraft, draftToUpsertArgs, stepCompletion, useWizardDraft } from '@/hooks/useWizardDraft';
 import { indicatorSteps, WIZARD_STEPS } from '@/hooks/wizardSteps';
 import { toUserMessage } from '@/utils/errors';
-import { formatArea, humanizeRole } from '@/utils/format';
+import { formatArea, formatSurveyParcelLabel, humanizeRole } from '@/utils/format';
 import { normalizeMastersBundle } from '@/utils/mastersBundle';
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery } from 'convex/react';
@@ -166,14 +166,50 @@ export default function ReviewScreen() {
             subtitle={draft.wardNo ?? '—'}
             showChevron={false}
           />
+          {draft.sectorNo ? (
+            <>
+              <Divider />
+              <ListRow
+                icon="grid-outline"
+                iconTone="neutral"
+                title="Sector"
+                subtitle={draft.sectorNo}
+                showChevron={false}
+              />
+            </>
+          ) : null}
           <Divider />
           <ListRow
             icon="pricetag-outline"
             iconTone="neutral"
-            title="Property no"
-            subtitle={draft.propertyNo ?? '—'}
+            title="Parcel / unit"
+            subtitle={draft.parcelNo && draft.unitNo ? formatSurveyParcelLabel(draft.parcelNo, draft.unitNo) : '—'}
             showChevron={false}
           />
+          {draft.oldPropertyNo ? (
+            <>
+              <Divider />
+              <ListRow
+                icon="document-text-outline"
+                iconTone="neutral"
+                title="Old property no"
+                subtitle={draft.oldPropertyNo}
+                showChevron={false}
+              />
+            </>
+          ) : null}
+          {draft.constructedYear != null ? (
+            <>
+              <Divider />
+              <ListRow
+                icon="calendar-outline"
+                iconTone="neutral"
+                title="Constructed year"
+                subtitle={String(draft.constructedYear)}
+                showChevron={false}
+              />
+            </>
+          ) : null}
         </AppCard>
 
         <SectionLabel>Owner</SectionLabel>
@@ -181,10 +217,48 @@ export default function ReviewScreen() {
           <ListRow
             icon="person-outline"
             iconTone="brand"
-            title="Owner"
-            subtitle={draft.ownerName ?? '—'}
+            title="Respondent"
+            subtitle={draft.respondentName?.trim() || '—'}
             showChevron={false}
           />
+          {draft.relationship ? (
+            <>
+              <Divider />
+              <ListRow
+                icon="link-outline"
+                iconTone="neutral"
+                title="Relation to owner"
+                subtitle={draft.relationship}
+                showChevron={false}
+              />
+            </>
+          ) : null}
+          {(draft.owners ?? [])
+            .filter((o) => o.name?.trim() || o.fatherOrHusbandName?.trim())
+            .map((o, i) => (
+              <View key={o.clientOwnerId}>
+                <Divider />
+                <ListRow
+                  icon="home-outline"
+                  iconTone="neutral"
+                  title={draft.owners!.length > 1 ? `Owner ${i + 1}` : 'Owner name'}
+                  subtitle={[o.name?.trim(), o.fatherOrHusbandName?.trim()].filter(Boolean).join(' · ') || '—'}
+                  showChevron={false}
+                />
+              </View>
+            ))}
+          {draft.familySize != null ? (
+            <>
+              <Divider />
+              <ListRow
+                icon="people-outline"
+                iconTone="neutral"
+                title="Family members"
+                subtitle={`${draft.familySize}`}
+                showChevron={false}
+              />
+            </>
+          ) : null}
           <Divider />
           <ListRow
             icon="call-outline"
@@ -193,14 +267,18 @@ export default function ReviewScreen() {
             subtitle={draft.mobileNo ?? '—'}
             showChevron={false}
           />
-          <Divider />
-          <ListRow
-            icon="people-outline"
-            iconTone="neutral"
-            title="Family size"
-            subtitle={`${draft.familySize ?? '—'}`}
-            showChevron={false}
-          />
+          {draft.altMobileNo ? (
+            <>
+              <Divider />
+              <ListRow
+                icon="call-outline"
+                iconTone="neutral"
+                title="Alternate mobile"
+                subtitle={draft.altMobileNo}
+                showChevron={false}
+              />
+            </>
+          ) : null}
         </AppCard>
 
         <SectionLabel>Address</SectionLabel>

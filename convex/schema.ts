@@ -46,6 +46,12 @@ export const gpsCapture = v.object({
   isMockLocation: v.optional(v.boolean()),
 });
 
+/** One co-owner row on a survey (name + patronymic optional). */
+export const surveyOwnerEntry = v.object({
+  name: v.optional(v.string()),
+  fatherOrHusbandName: v.optional(v.string()),
+});
+
 /* ────────────────────────── schema ────────────────────────── */
 
 export default defineSchema({
@@ -153,15 +159,20 @@ export default defineSchema({
     submittedAt: v.optional(v.number()),
 
     // Section 1 — Property
-    propertyNo: v.string(),
+    sectorNo: v.optional(v.string()),
+    oldPropertyNo: v.optional(v.string()),
+    parcelNo: v.string(),
+    unitNo: v.string(),
+    constructedYear: v.optional(v.number()),
     isSlum: v.boolean(),
 
-    // Section 2 — Owner
-    ownerName: v.string(),
-    respondentName: v.string(),
-    relationship: v.string(),
+    // Section 2 — Owner (mobile required; rest optional at capture)
+    respondentName: v.optional(v.string()),
+    relationship: v.optional(v.string()),
+    owners: v.optional(v.array(surveyOwnerEntry)),
+    familySize: v.optional(v.number()),
     mobileNo: v.string(),
-    familySize: v.number(),
+    altMobileNo: v.optional(v.string()),
 
     // Section 3 — Address
     houseNo: v.string(),

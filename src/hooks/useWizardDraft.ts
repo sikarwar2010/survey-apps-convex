@@ -19,11 +19,46 @@
  *   - useWizardDraft(id) → loads the draft for `localId`, exposes update + reset
  *   - clearDraft(id)     → drops the entry from AsyncStorage after successful submit
  */
+import { isValidIndianMobile } from '@/utils/format';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useState } from 'react';
 import type { Id } from '../../convex/_generated/dataModel';
 
 const KEY = (localId: string) => `wizard_draft:${localId}`;
+
+export type WizardOwnerRow = {
+  clientOwnerId: string;
+  name?: string;
+  fatherOrHusbandName?: string;
+};
+
+export function newOwnerRow(): WizardOwnerRow {
+  return {
+    clientOwnerId: `ow_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+  };
+}
+
+/** Migrate legacy draft fields after schema changes. */
+function migrateWizardDraft(
+  raw: WizardDraft & { propertyNo?: string; ownerName?: string; fatherOrHusbandName?: string },
+): WizardDraft {
+  if (raw.propertyNo && !raw.oldPropertyNo) {
+    raw.oldPropertyNo = raw.propertyNo;
+  }
+  delete raw.propertyNo;
+  if (!raw.owners?.length && (raw.ownerName?.trim() || raw.fatherOrHusbandName?.trim())) {
+    raw.owners = [
+      {
+        clientOwnerId: newOwnerRow().clientOwnerId,
+        name: raw.ownerName,
+        fatherOrHusbandName: raw.fatherOrHusbandName,
+      },
+    ];
+  }
+  delete raw.ownerName;
+  delete raw.fatherOrHusbandName;
+  return raw;
+}
 
 export interface WizardDraft {
   localId: string;
@@ -37,15 +72,20 @@ export interface WizardDraft {
   // Step 1 — Property
   municipalityId?: Id<'municipalities'>;
   wardNo?: string;
-  propertyNo?: string;
+  sectorNo?: string;
+  oldPropertyNo?: string;
+  parcelNo?: string;
+  unitNo?: string;
+  constructedYear?: number;
   isSlum?: boolean;
 
   // Step 2 — Owner
-  ownerName?: string;
   respondentName?: string;
   relationship?: string;
-  mobileNo?: string;
+  owners?: WizardOwnerRow[];
   familySize?: number;
+  mobileNo?: string;
+  altMobileNo?: string;
 
   // Step 3 — Address
   houseNo?: string;
@@ -116,7 +156,6 @@ export async function createNewDraft(): Promise<WizardDraft> {
     createdAt: Date.now(),
     updatedAt: Date.now(),
     isSlum: false,
-    familySize: 1,
     floors: [],
     photos: [],
   };
@@ -139,13 +178,18 @@ export function surveyToDraft(survey: {
   districtId?: Id<'districts'>;
   municipalityId: Id<'municipalities'>;
   wardNo: string;
-  propertyNo: string;
+  sectorNo?: string;
+  oldPropertyNo?: string;
+  parcelNo: string;
+  unitNo: string;
+  constructedYear?: number;
   isSlum: boolean;
-  ownerName: string;
-  respondentName: string;
-  relationship: string;
+  respondentName?: string;
+  relationship?: string;
+  owners?: Array<{ name?: string; fatherOrHusbandName?: string }>;
+  familySize?: number;
   mobileNo: string;
-  familySize: number;
+  altMobileNo?: string;
   houseNo: string;
   street: string;
   locality?: string;
@@ -191,13 +235,23 @@ export function surveyToDraft(survey: {
     districtId: survey.districtId,
     municipalityId: survey.municipalityId,
     wardNo: survey.wardNo,
-    propertyNo: survey.propertyNo,
+    sectorNo: survey.sectorNo,
+    oldPropertyNo: survey.oldPropertyNo,
+    parcelNo: survey.parcelNo,
+    unitNo: survey.unitNo,
+    constructedYear: survey.constructedYear,
     isSlum: survey.isSlum,
-    ownerName: survey.ownerName,
     respondentName: survey.respondentName,
     relationship: survey.relationship,
-    mobileNo: survey.mobileNo,
+    owners:
+      survey.owners?.map((o, i) => ({
+        clientOwnerId: `ow_${i}_${survey.localId}`,
+        name: o.name,
+        fatherOrHusbandName: o.fatherOrHusbandName,
+      })) ?? [],
     familySize: survey.familySize,
+    mobileNo: survey.mobileNo,
+    altMobileNo: survey.altMobileNo,
     houseNo: survey.houseNo,
     street: survey.street,
     locality: survey.locality,
@@ -242,7 +296,13 @@ export async function listDrafts(): Promise<WizardDraft[]> {
   const wizardKeys = keys.filter((k) => k.startsWith('wizard_draft:'));
   const pairs = await AsyncStorage.multiGet(wizardKeys);
   return pairs
-    .map(([, v]) => (v ? (JSON.parse(v) as WizardDraft) : null))
+    .map(([, v]) =>
+      v
+        ? migrateWizardDraft(
+            JSON.parse(v) as WizardDraft & { propertyNo?: string; ownerName?: string; fatherOrHusbandName?: string },
+          )
+        : null,
+    )
     .filter((d): d is WizardDraft => d !== null)
     .sort((a, b) => b.updatedAt - a.updatedAt);
 }
@@ -266,7 +326,15 @@ export function useWizardDraft(localId: string | undefined) {
       .then(async (raw) => {
         if (!alive) return;
         if (raw) {
-          setDraft(JSON.parse(raw) as WizardDraft);
+          setDraft(
+            migrateWizardDraft(
+              JSON.parse(raw) as WizardDraft & {
+                propertyNo?: string;
+                ownerName?: string;
+                fatherOrHusbandName?: string;
+              },
+            ),
+          );
           return;
         }
         const empty: WizardDraft = {
@@ -274,7 +342,6 @@ export function useWizardDraft(localId: string | undefined) {
           createdAt: Date.now(),
           updatedAt: Date.now(),
           isSlum: false,
-          familySize: 1,
           floors: [],
           photos: [],
         };
@@ -304,10 +371,8 @@ export function draftToUpsertArgs(d: WizardDraft) {
   if (
     !d.municipalityId ||
     !d.wardNo ||
-    !d.propertyNo ||
-    !d.ownerName ||
-    !d.respondentName ||
-    !d.relationship ||
+    !d.parcelNo?.trim() ||
+    !d.unitNo?.trim() ||
     !d.mobileNo ||
     !d.houseNo ||
     !d.street ||
@@ -332,13 +397,26 @@ export function draftToUpsertArgs(d: WizardDraft) {
     localId: d.localId,
     municipalityId: d.municipalityId,
     wardNo: d.wardNo,
-    propertyNo: d.propertyNo,
+    sectorNo: d.sectorNo?.trim() || undefined,
+    oldPropertyNo: d.oldPropertyNo?.trim() || undefined,
+    parcelNo: d.parcelNo.trim(),
+    unitNo: d.unitNo.trim(),
+    constructedYear: d.constructedYear,
     isSlum: !!d.isSlum,
-    ownerName: d.ownerName,
-    respondentName: d.respondentName,
-    relationship: d.relationship,
+    respondentName: d.respondentName?.trim() || undefined,
+    relationship: d.relationship?.trim() || undefined,
+    owners: (() => {
+      const cleaned = d.owners
+        ?.map((o) => ({
+          name: o.name?.trim() || undefined,
+          fatherOrHusbandName: o.fatherOrHusbandName?.trim() || undefined,
+        }))
+        .filter((o) => o.name || o.fatherOrHusbandName);
+      return cleaned?.length ? cleaned : undefined;
+    })(),
+    familySize: d.familySize,
     mobileNo: d.mobileNo,
-    familySize: d.familySize ?? 1,
+    altMobileNo: d.altMobileNo?.trim() || undefined,
     houseNo: d.houseNo,
     street: d.street,
     locality: d.locality,
@@ -362,6 +440,16 @@ export function draftToUpsertArgs(d: WizardDraft) {
   };
 }
 
+/** Owner step: primary mobile required; alternate validated when entered. */
+export function ownerStepComplete(d: WizardDraft): boolean {
+  if (!d.mobileNo || !isValidIndianMobile(d.mobileNo)) return false;
+  if (d.altMobileNo) {
+    if (!isValidIndianMobile(d.altMobileNo) || d.altMobileNo === d.mobileNo) return false;
+  }
+  if (d.familySize != null && (!Number.isInteger(d.familySize) || d.familySize < 1)) return false;
+  return true;
+}
+
 /**
  * Reports which steps are complete. Drives the StepIndicator's checkmarks
  * and the "Submit" button's enabled state on the review screen.
@@ -369,8 +457,8 @@ export function draftToUpsertArgs(d: WizardDraft) {
 export function stepCompletion(d: WizardDraft) {
   return {
     start: !!(d.assessmentYear && d.districtId && d.municipalityId),
-    property: !!(d.wardNo && d.propertyNo),
-    owner: !!(d.ownerName && d.respondentName && d.relationship && d.mobileNo),
+    property: !!(d.wardNo && d.parcelNo?.trim() && d.unitNo?.trim()),
+    owner: ownerStepComplete(d),
     address: !!(d.houseNo && d.street && d.city && d.pinCode),
     taxation: !!(
       d.ownershipType &&

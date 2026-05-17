@@ -8,7 +8,7 @@ import { AppButton, AppCard, Banner, ListRow, SectionLabel, Spinner, StatusBadge
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
 import { toUserMessage } from '@/utils/errors';
-import { formatArea, humanizeRole, timeAgo } from '@/utils/format';
+import { formatArea, formatSurveyParcelLabel, humanizeRole, timeAgo } from '@/utils/format';
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery } from 'convex/react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -95,7 +95,7 @@ export default function SurveyDetailScreen() {
           <View className="flex-1 ml-2">
             <Text className="text-helper text-white/75">Survey · v{survey.serverVersion}</Text>
             <Text className="text-h3 font-medium text-white" numberOfLines={1}>
-              {survey.propertyNo}
+              {formatSurveyParcelLabel(survey.parcelNo, survey.unitNo)}
             </Text>
           </View>
         </View>
@@ -128,10 +128,48 @@ export default function SurveyDetailScreen() {
           <ListRow
             icon="person-outline"
             iconTone="brand"
-            title="Owner"
-            subtitle={survey.ownerName}
+            title="Respondent"
+            subtitle={survey.respondentName?.trim() || '—'}
             showChevron={false}
           />
+          {survey.relationship ? (
+            <>
+              <View className="h-px bg-line-subtle" />
+              <ListRow
+                icon="link-outline"
+                iconTone="neutral"
+                title="Relation to owner"
+                subtitle={survey.relationship}
+                showChevron={false}
+              />
+            </>
+          ) : null}
+          {(survey.owners ?? [])
+            .filter((o) => o.name?.trim() || o.fatherOrHusbandName?.trim())
+            .map((o, i) => (
+              <View key={`${o.name ?? ''}-${i}`}>
+                <View className="h-px bg-line-subtle" />
+                <ListRow
+                  icon="home-outline"
+                  iconTone="neutral"
+                  title={(survey.owners?.length ?? 0) > 1 ? `Owner ${i + 1}` : 'Owner name'}
+                  subtitle={[o.name?.trim(), o.fatherOrHusbandName?.trim()].filter(Boolean).join(' · ') || '—'}
+                  showChevron={false}
+                />
+              </View>
+            ))}
+          {survey.familySize != null ? (
+            <>
+              <View className="h-px bg-line-subtle" />
+              <ListRow
+                icon="people-outline"
+                iconTone="neutral"
+                title="Family members"
+                subtitle={`${survey.familySize}`}
+                showChevron={false}
+              />
+            </>
+          ) : null}
           <View className="h-px bg-line-subtle" />
           <ListRow
             icon="call-outline"
@@ -140,14 +178,18 @@ export default function SurveyDetailScreen() {
             subtitle={survey.mobileNo}
             showChevron={false}
           />
-          <View className="h-px bg-line-subtle" />
-          <ListRow
-            icon="people-outline"
-            iconTone="neutral"
-            title="Family size"
-            subtitle={`${survey.familySize}`}
-            showChevron={false}
-          />
+          {survey.altMobileNo ? (
+            <>
+              <View className="h-px bg-line-subtle" />
+              <ListRow
+                icon="call-outline"
+                iconTone="neutral"
+                title="Alternate mobile"
+                subtitle={survey.altMobileNo}
+                showChevron={false}
+              />
+            </>
+          ) : null}
         </AppCard>
 
         <SectionLabel>Address</SectionLabel>

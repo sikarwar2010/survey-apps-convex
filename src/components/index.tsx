@@ -6,6 +6,7 @@
  * to audit. Components are pure (no hooks beyond local state) so they
  * can render anywhere in the tree.
  */
+import { formatSurveyParcelLabel } from '@/utils/format';
 import { Ionicons } from '@expo/vector-icons';
 import { ReactNode, useEffect, useRef, useState } from 'react';
 import {
@@ -635,7 +636,8 @@ export function RadioGroup<T extends string>({ items, value, onChange }: RadioGr
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 interface SurveyCardProps {
-  propertyNo: string;
+  parcelNo: string;
+  unitNo: string;
   ownerName: string;
   wardNo: string;
   status: StatusBadgeProps['status'];
@@ -643,7 +645,16 @@ interface SurveyCardProps {
   updatedAt: number;
   onPress: () => void;
 }
-export function SurveyCard({ propertyNo, ownerName, wardNo, status, qcStatus, updatedAt, onPress }: SurveyCardProps) {
+export function SurveyCard({
+  parcelNo,
+  unitNo,
+  ownerName,
+  wardNo,
+  status,
+  qcStatus,
+  updatedAt,
+  onPress,
+}: SurveyCardProps) {
   return (
     <Pressable
       onPress={onPress}
@@ -655,7 +666,7 @@ export function SurveyCard({ propertyNo, ownerName, wardNo, status, qcStatus, up
         </View>
         <View className="flex-1 ml-3">
           <Text className="text-[13px] font-medium text-ink-primary-light dark:text-ink-primary-dark">
-            {propertyNo}
+            {formatSurveyParcelLabel(parcelNo, unitNo)}
           </Text>
           <Text className="text-caption text-ink-tertiary-light dark:text-ink-tertiary-dark mt-0.5" numberOfLines={1}>
             {ownerName}

@@ -6,7 +6,7 @@
  */
 import { AppButton, Banner, EmptyState, KpiCard, PulseDot, SectionLabel, Spinner, SurveyCard } from '@/components';
 import { api } from '@/convex/_generated/api';
-import { humanizeRole } from '@/utils/format';
+import { humanizeRole, surveyOwnerListLabel } from '@/utils/format';
 import { useQuery } from 'convex/react';
 import { useRouter } from 'expo-router';
 import { ScrollView, Text, View } from 'react-native';
@@ -94,8 +94,9 @@ export default function DashboardScreen() {
             {recent.map((s) => (
               <SurveyCard
                 key={s._id}
-                propertyNo={s.propertyNo}
-                ownerName={s.ownerName}
+                parcelNo={s.parcelNo}
+                unitNo={s.unitNo}
+                ownerName={surveyOwnerListLabel(s.owners, s.respondentName)}
                 wardNo={s.wardNo}
                 status={s.status}
                 qcStatus={s.qcStatus}

@@ -1,5 +1,5 @@
 /**
- * Step 1 — Property / survey scope (ward + property number).
+ * Step 1 — Property / survey scope (ward, parcel, unit).
  *
  * District, ULB, and assessment year are set on the survey start step.
  */
@@ -36,7 +36,7 @@ export default function StepProperty() {
       localId={localId}
       activeKey="property"
       title="Survey"
-      subtitle="Ward and property identification"
+      subtitle="Ward, parcel, and unit identification"
       nextDisabled={(d) => !stepCompletion(d).property}
     >
       {({ draft, update }) => <PropertyFields draft={draft} update={update} masters={bundle} />}
@@ -134,18 +134,50 @@ function PropertyFields({
               Ward {selectedWard.wardNo} ({selectedWard.wardCode}) · {selectedWard.name}
             </Text>
           ) : null}
+          <AppInput
+            label="Sector number"
+            value={draft.sectorNo ?? ''}
+            onChangeText={(v) => update({ sectorNo: v })}
+            placeholder="e.g. 3"
+            helperText="Optional — municipal sector within the ward"
+          />
         </View>
       </AppCard>
 
       <SectionLabel>Identification</SectionLabel>
-      <AppCard padded className="mb-3">
+      <AppCard padded className="mb-3" style={{ gap: 12 }}>
         <AppInput
-          label="Property number"
+          label="Parcel number"
           required
-          value={draft.propertyNo ?? ''}
-          onChangeText={(v) => update({ propertyNo: v })}
+          value={draft.parcelNo ?? ''}
+          onChangeText={(v) => update({ parcelNo: v })}
+          placeholder="e.g. P-1042"
+          helperText="Official parcel / plot identifier"
+        />
+        <AppInput
+          label="Unit no"
+          required
+          value={draft.unitNo ?? ''}
+          onChangeText={(v) => update({ unitNo: v })}
+          placeholder="e.g. 4A"
+        />
+        <AppInput
+          label="Old property number"
+          value={draft.oldPropertyNo ?? ''}
+          onChangeText={(v) => update({ oldPropertyNo: v })}
           placeholder="e.g. 12/45/A"
-          helperText="Use the official municipal property number from the assessment register"
+          helperText="Optional — previous assessment register number"
+        />
+        <AppInput
+          label="Constructed year"
+          value={draft.constructedYear != null ? String(draft.constructedYear) : ''}
+          onChangeText={(v) => {
+            const digits = v.replace(/\D/g, '');
+            update({ constructedYear: digits ? Number(digits) : undefined });
+          }}
+          placeholder="e.g. 1998"
+          keyboardType="number-pad"
+          helperText="Optional — year the structure was built"
         />
       </AppCard>
 
@@ -162,9 +194,9 @@ function PropertyFields({
         />
       </AppCard>
 
-      {!draft.wardNo || !draft.propertyNo ? (
+      {!draft.wardNo || !draft.parcelNo?.trim() || !draft.unitNo?.trim() ? (
         <Text className="text-caption text-ink-tertiary-light px-1 mt-3">
-          Select a ward and enter the property number to continue.
+          Select a ward and enter parcel number and unit no to continue.
         </Text>
       ) : null}
     </>

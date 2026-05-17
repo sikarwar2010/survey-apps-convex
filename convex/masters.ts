@@ -5,6 +5,7 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
 import { requireUser } from './helpers';
+import { RESPONDENT_RELATIONSHIPS } from './ownerRules';
 import { assertMunicipalityInScope, resolveTenantScope } from './tenancy';
 
 interface Option {
@@ -84,7 +85,7 @@ export const bundle = query({
       situations: grouped['situation'] ?? [],
       roadTypes: grouped['road_type'] ?? [],
       taxRateZones: grouped['tax_rate_zone'] ?? [],
-      relationships: grouped['relationship'] ?? [],
+      relationships: RESPONDENT_RELATIONSHIPS,
       waterSources: grouped['water_source'] ?? [],
       sanitationTypes: grouped['sanitation_type'] ?? [],
       solidWasteTypes: grouped['solid_waste_type'] ?? [],
