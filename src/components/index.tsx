@@ -653,3 +653,296 @@ export function SurveyCard({ propertyNo, ownerName, wardNo, status, qcStatus, up
     </Pressable>
   );
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * StepIndicator — 8-step horizontal pill with completion state
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+export interface StepIndicatorStep {
+  key: string;
+  label: string;
+  short: string;          // 1–2 char label for the dot
+  completed: boolean;
+}
+interface StepIndicatorProps {
+  steps: StepIndicatorStep[];
+  activeKey: string;
+  onSelect?: (key: string) => void;
+}
+export function StepIndicator({ steps, activeKey, onSelect }: StepIndicatorProps) {
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 10, gap: 6 }}
+    >
+      {steps.map((s, i) => {
+        const active = s.key === activeKey;
+        const bg = active
+          ? "bg-brand"
+          : s.completed
+          ? "bg-success"
+          : "bg-line-subtle";
+        const fg = active || s.completed ? "text-white" : "text-ink-secondary-light";
+        return (
+          <Pressable
+            key={s.key}
+            onPress={() => onSelect?.(s.key)}
+            disabled={!onSelect}
+            className="flex-row items-center"
+          >
+            <View className={`px-2.5 py-1 rounded-full flex-row items-center gap-1 ${bg}`}>
+              {s.completed && !active ? (
+                <Ionicons name="checkmark" size={11} color="#FFFFFF" />
+              ) : (
+                <Text className={`text-[10px] font-medium ${fg}`}>{i + 1}</Text>
+              )}
+              <Text className={`text-[11px] font-medium ${fg}`}>{s.label}</Text>
+            </View>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * WizardHeader — brand strip + step indicator
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+interface WizardHeaderProps {
+  title: string;
+  subtitle?: string;
+  steps: StepIndicatorStep[];
+  activeKey: string;
+  onBack: () => void;
+  onSelectStep?: (key: string) => void;
+}
+export function WizardHeader({ title, subtitle, steps, activeKey, onBack, onSelectStep }: WizardHeaderProps) {
+  return (
+    <View className="bg-brand">
+      <View className="px-4 pt-2 pb-2.5 flex-row items-center">
+        <Pressable onPress={onBack} hitSlop={8} className="w-9 h-9 items-center justify-center">
+          <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
+        </Pressable>
+        <View className="flex-1 ml-1">
+          <Text className="text-helper text-white/70">New survey</Text>
+          <Text className="text-h3 font-medium text-white">{title}</Text>
+          {subtitle ? <Text className="text-caption text-white/75 mt-0.5">{subtitle}</Text> : null}
+        </View>
+      </View>
+      <StepIndicator steps={steps} activeKey={activeKey} onSelect={onSelectStep} />
+    </View>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * FloatingSaveBar — sticky bottom save & continue
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+interface FloatingSaveBarProps {
+  onBack?: () => void;
+  onNext: () => void;
+  nextLabel?: string;
+  nextDisabled?: boolean;
+  loading?: boolean;
+}
+export function FloatingSaveBar({
+  onBack, onNext, nextLabel = "Save & continue", nextDisabled, loading,
+}: FloatingSaveBarProps) {
+  return (
+    <View className="border-t border-line-subtle bg-surface-light dark:bg-surface-dark px-3.5 pt-2.5 pb-5">
+      <View className="flex-row gap-2">
+        {onBack ? (
+          <AppButton
+            label="Back"
+            variant="outline"
+            iconLeft="chevron-back"
+            onPress={onBack}
+            className="flex-1"
+          />
+        ) : null}
+        <AppButton
+          label={nextLabel}
+          onPress={onNext}
+          iconRight="arrow-forward"
+          disabled={nextDisabled}
+          loading={loading}
+          className={onBack ? "flex-[1.5]" : "flex-1"}
+        />
+      </View>
+    </View>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * NumberStepper — for floor counts, family size, etc.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+interface NumberStepperProps {
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  label?: string;
+}
+export function NumberStepper({ value, onChange, min = 0, max = 99, step = 1, label }: NumberStepperProps) {
+  const dec = () => onChange(Math.max(min, value - step));
+  const inc = () => onChange(Math.min(max, value + step));
+  return (
+    <View>
+      {label ? (
+        <Text className="text-label uppercase tracking-wider font-medium text-ink-secondary-light dark:text-ink-secondary-dark mb-1.5">
+          {label}
+        </Text>
+      ) : null}
+      <View className="flex-row items-center bg-surface-light dark:bg-surface-dark rounded-md border border-line-default">
+        <Pressable
+          onPress={dec}
+          disabled={value <= min}
+          className="w-12 h-12 items-center justify-center"
+        >
+          <Ionicons name="remove" size={20} color={value <= min ? "#9AA3AF" : "#003B8E"} />
+        </Pressable>
+        <View className="flex-1 items-center">
+          <Text className="text-h2 font-medium text-ink-primary-light dark:text-ink-primary-dark">
+            {value}
+          </Text>
+        </View>
+        <Pressable
+          onPress={inc}
+          disabled={value >= max}
+          className="w-12 h-12 items-center justify-center"
+        >
+          <Ionicons name="add" size={20} color={value >= max ? "#9AA3AF" : "#003B8E"} />
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * ChipSelector — single-select horizontal chips (alternative to dropdowns)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+interface ChipSelectorProps {
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (v: string) => void;
+  scroll?: boolean;
+}
+export function ChipSelector({ value, options, onChange, scroll = true }: ChipSelectorProps) {
+  const content = options.map((o) => {
+    const active = o.value === value;
+    return (
+      <Pressable
+        key={o.value}
+        onPress={() => onChange(o.value)}
+        className={`px-3 py-1.5 rounded-full border ${active ? "bg-brand border-brand" : "bg-surface-light dark:bg-surface-dark border-line-default"}`}
+      >
+        <Text className={`text-[12px] font-medium ${active ? "text-white" : "text-ink-secondary-light dark:text-ink-secondary-dark"}`}>
+          {o.label}
+        </Text>
+      </Pressable>
+    );
+  });
+  if (scroll) {
+    return (
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+        {content}
+      </ScrollView>
+    );
+  }
+  return <View className="flex-row flex-wrap gap-1.5">{content}</View>;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * GPSStatus — animated marker chip for the GPS step
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+interface GPSStatusProps {
+  state: "idle" | "locating" | "captured" | "error";
+  accuracy?: number;
+}
+export function GPSStatus({ state, accuracy }: GPSStatusProps) {
+  const tone: Tone =
+    state === "captured" ? (accuracy && accuracy > 30 ? "warning" : "success") :
+    state === "error" ? "danger" :
+    state === "locating" ? "brand" :
+    "neutral";
+  const label =
+    state === "locating" ? "Locating…" :
+    state === "captured" ? `±${Math.round(accuracy ?? 0)} m accuracy` :
+    state === "error" ? "GPS unavailable" :
+    "GPS not captured";
+  const icon: IconName =
+    state === "captured" ? "checkmark-circle" :
+    state === "error" ? "alert-circle" :
+    state === "locating" ? "compass" :
+    "location-outline";
+  return <Tag label={label} tone={tone} icon={icon} />;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * PhotoSlot — visual slot for photo capture (front/inside/side/document)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+interface PhotoSlotProps {
+  slot: "front" | "inside" | "side" | "document";
+  required?: boolean;
+  thumbnailUrl?: string;
+  onPick: () => void;
+  onRemove?: () => void;
+  uploading?: boolean;
+}
+export function PhotoSlot({ slot, required, thumbnailUrl, onPick, onRemove, uploading }: PhotoSlotProps) {
+  const titles: Record<PhotoSlotProps["slot"], string> = {
+    front: "Front view",
+    inside: "Inside view",
+    side: "Side view",
+    document: "Document",
+  };
+  const has = !!thumbnailUrl;
+  return (
+    <View className="bg-surface-light dark:bg-surface-dark rounded-xl border border-line-subtle p-3">
+      <View className="flex-row items-center justify-between mb-2">
+        <View className="flex-row items-center gap-1.5">
+          <Text className="text-[13px] font-medium text-ink-primary-light dark:text-ink-primary-dark">
+            {titles[slot]}
+          </Text>
+          {required ? <Tag label="Required" tone="danger" /> : null}
+          {has ? <Tag label="Captured" tone="success" icon="checkmark" /> : null}
+        </View>
+      </View>
+      <Pressable
+        onPress={onPick}
+        disabled={uploading}
+        className="h-32 rounded-md bg-page-light dark:bg-page-dark border border-dashed border-line-default items-center justify-center"
+      >
+        {uploading ? (
+          <>
+            <ActivityIndicator color="#003B8E" />
+            <Text className="text-caption text-ink-tertiary-light mt-1.5">Uploading…</Text>
+          </>
+        ) : has ? (
+          <View className="flex-row items-center">
+            <Ionicons name="image" size={32} color="#003B8E" />
+            <Text className="ml-2 text-helper text-ink-secondary-light">Tap to replace</Text>
+          </View>
+        ) : (
+          <View className="items-center">
+            <Ionicons name="camera-outline" size={28} color="#003B8E" />
+            <Text className="text-helper text-brand font-medium mt-1.5">Capture photo</Text>
+          </View>
+        )}
+      </Pressable>
+      {has && onRemove ? (
+        <Pressable onPress={onRemove} className="mt-2 flex-row items-center justify-center">
+          <Ionicons name="trash-outline" size={14} color="#DC2626" />
+          <Text className="text-helper text-danger ml-1">Remove</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
