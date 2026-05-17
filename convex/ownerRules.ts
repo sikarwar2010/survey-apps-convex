@@ -33,27 +33,50 @@ export const RESPONDENT_RELATIONSHIPS: { value: RespondentRelationshipValue; lab
 ];
 
 const RELATIONSHIP_SET = new Set<string>(RESPONDENT_RELATIONSHIP_VALUES);
+const MOBILE_RE = /^[6-9]\d{9}$/;
 
 export const MAX_SURVEY_OWNERS = 10;
 
 export type OwnerEntry = {
   name?: string;
   fatherOrHusbandName?: string;
+  mobileNo?: string;
+  altMobileNo?: string;
 };
 
 export function isValidRespondentRelationship(value: string): boolean {
   return RELATIONSHIP_SET.has(value);
 }
 
-/** Drop blank rows; trim names. */
+export function isValidOwnerMobile(value: string): boolean {
+  return MOBILE_RE.test(value);
+}
+
+/** First owner row with a valid mobile (primary contact for the survey). */
+export function primaryOwnerMobile(owners: OwnerEntry[] | undefined): string | undefined {
+  if (!owners?.length) return undefined;
+  for (const o of owners) {
+    const m = o.mobileNo?.trim();
+    if (m && isValidOwnerMobile(m)) return m;
+  }
+  return undefined;
+}
+
+/** Drop blank rows; trim fields. */
 export function normalizeOwners(owners: OwnerEntry[] | undefined): OwnerEntry[] | undefined {
   if (!owners?.length) return undefined;
+  const trimOpt = (s?: string) => {
+    const t = s?.trim();
+    return t ? t : undefined;
+  };
   const cleaned = owners
     .map((o) => ({
-      name: o.name?.trim() || undefined,
-      fatherOrHusbandName: o.fatherOrHusbandName?.trim() || undefined,
+      name: trimOpt(o.name),
+      fatherOrHusbandName: trimOpt(o.fatherOrHusbandName),
+      mobileNo: trimOpt(o.mobileNo),
+      altMobileNo: trimOpt(o.altMobileNo),
     }))
-    .filter((o) => o.name || o.fatherOrHusbandName);
+    .filter((o) => o.name || o.fatherOrHusbandName || o.mobileNo || o.altMobileNo);
   return cleaned.length ? cleaned : undefined;
 }
 
@@ -66,10 +89,28 @@ export function validateOwnerSection(input: {
   if (input.relationship && !isValidRespondentRelationship(input.relationship)) {
     details.relationship = ['Select a valid relationship to owner'];
   }
-  const count = input.owners?.length ?? 0;
-  if (count > MAX_SURVEY_OWNERS) {
+  const owners = input.owners ?? [];
+  if (owners.length > MAX_SURVEY_OWNERS) {
     details.owners = [`At most ${MAX_SURVEY_OWNERS} owners allowed`];
   }
+  const primary = primaryOwnerMobile(owners);
+  if (!primary) {
+    details.mobileNo = ['Enter a valid 10-digit mobile for the first owner (starts 6-9)'];
+  }
+  owners.forEach((o, i) => {
+    const mobile = o.mobileNo?.trim();
+    if (mobile && !isValidOwnerMobile(mobile)) {
+      details[`owners.${i}.mobileNo`] = ['Enter a valid 10-digit mobile (starts 6-9)'];
+    }
+    const alt = o.altMobileNo?.trim();
+    if (alt) {
+      if (!isValidOwnerMobile(alt)) {
+        details[`owners.${i}.altMobileNo`] = ['Enter a valid 10-digit alternate mobile (starts 6-9)'];
+      } else if (alt === mobile) {
+        details[`owners.${i}.altMobileNo`] = ['Alternate mobile must differ from primary mobile'];
+      }
+    }
+  });
   return details;
 }
 

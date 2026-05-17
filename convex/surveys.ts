@@ -11,7 +11,7 @@ import { ConvexError, v } from 'convex/values';
 import type { Doc, Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
 import { assertCanReadWard, clientError, requireRole, requireUser, writeAudit } from './helpers';
-import { normalizeOwners, validateOwnerSection } from './ownerRules';
+import { normalizeOwners, primaryOwnerMobile, validateOwnerSection } from './ownerRules';
 import { gpsCapture, qcStatus, surveyOwnerEntry, surveyStatus } from './schema';
 import { assertMunicipalityInScope, resolveTenantScope, tenantDistrictIds, tenantMunicipalityIds } from './tenancy';
 
@@ -433,12 +433,16 @@ function normalizeOwnerFields<T extends SurveyUpsertArgs>(args: T): T {
     const t = s?.trim();
     return t ? t : undefined;
   };
+  const owners = normalizeOwners(args.owners as Parameters<typeof normalizeOwners>[0]);
+  const mobileNo = primaryOwnerMobile(owners) ?? trimOpt(args.mobileNo as string | undefined) ?? '';
+  const altMobileNo = owners?.[0]?.altMobileNo ?? trimOpt(args.altMobileNo as string | undefined);
   return {
     ...args,
     respondentName: trimOpt(args.respondentName as string | undefined),
     relationship: trimOpt(args.relationship as string | undefined),
-    owners: normalizeOwners(args.owners as Parameters<typeof normalizeOwners>[0]),
-    altMobileNo: trimOpt(args.altMobileNo as string | undefined),
+    owners,
+    mobileNo,
+    altMobileNo,
     familySize: args.familySize as number | undefined,
   };
 }
@@ -451,18 +455,13 @@ function stripLocalId<T extends { localId: string; surveyorId?: Id<'users'> }>(a
 function validateBusinessRules(in_: Record<string, unknown>): void {
   const details: Record<string, string[]> = {};
 
-  const mobile = String(in_.mobileNo ?? '');
-  if (!/^[6-9]\d{9}$/.test(mobile)) {
-    details.mobileNo = ['Enter a valid 10-digit mobile (starts 6-9)'];
-  }
-  const altMobile = in_.altMobileNo as unknown as string | undefined;
-  if (altMobile != null && altMobile.trim() !== '') {
-    if (!/^[6-9]\d{9}$/.test(altMobile)) {
-      details.altMobileNo = ['Enter a valid 10-digit alternate mobile (starts 6-9)'];
-    } else if (altMobile === mobile) {
-      details.altMobileNo = ['Alternate mobile must differ from primary mobile'];
-    }
-  }
+  Object.assign(
+    details,
+    validateOwnerSection({
+      relationship: in_.relationship as string | undefined,
+      owners: in_.owners as Parameters<typeof validateOwnerSection>[0]['owners'],
+    }),
+  );
   if (!/^[1-9]\d{5}$/.test(in_.pinCode as unknown as string)) {
     details.pinCode = ['PIN must be 6 digits, not starting with 0'];
   }
@@ -494,13 +493,6 @@ function validateBusinessRules(in_: Record<string, unknown>): void {
   if (in_.gps && (in_.gps as unknown as { accuracyMeters: number }).accuracyMeters > 500) {
     details.gps = ['GPS accuracy too poor; retake outside'];
   }
-  Object.assign(
-    details,
-    validateOwnerSection({
-      relationship: in_.relationship as string | undefined,
-      owners: in_.owners as Parameters<typeof validateOwnerSection>[0]['owners'],
-    }),
-  );
   if (Object.keys(details).length > 0) {
     throw new ConvexError({
       code: 'VALIDATION',

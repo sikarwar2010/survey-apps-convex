@@ -46,10 +46,12 @@ export const gpsCapture = v.object({
   isMockLocation: v.optional(v.boolean()),
 });
 
-/** One co-owner row on a survey (name + patronymic optional). */
+/** One co-owner row on a survey (name, patronymic, contact optional per row). */
 export const surveyOwnerEntry = v.object({
   name: v.optional(v.string()),
   fatherOrHusbandName: v.optional(v.string()),
+  mobileNo: v.optional(v.string()),
+  altMobileNo: v.optional(v.string()),
 });
 
 /* ────────────────────────── schema ────────────────────────── */
@@ -171,6 +173,7 @@ export default defineSchema({
     relationship: v.optional(v.string()),
     owners: v.optional(v.array(surveyOwnerEntry)),
     familySize: v.optional(v.number()),
+    /** Primary contact — denormalized from first owner mobile on save. */
     mobileNo: v.string(),
     altMobileNo: v.optional(v.string()),
 

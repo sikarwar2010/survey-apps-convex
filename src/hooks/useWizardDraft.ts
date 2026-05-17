@@ -30,6 +30,8 @@ export type WizardOwnerRow = {
   clientOwnerId: string;
   name?: string;
   fatherOrHusbandName?: string;
+  mobileNo?: string;
+  altMobileNo?: string;
 };
 
 export function newOwnerRow(): WizardOwnerRow {
@@ -40,7 +42,13 @@ export function newOwnerRow(): WizardOwnerRow {
 
 /** Migrate legacy draft fields after schema changes. */
 function migrateWizardDraft(
-  raw: WizardDraft & { propertyNo?: string; ownerName?: string; fatherOrHusbandName?: string },
+  raw: WizardDraft & {
+    propertyNo?: string;
+    ownerName?: string;
+    fatherOrHusbandName?: string;
+    mobileNo?: string;
+    altMobileNo?: string;
+  },
 ): WizardDraft {
   if (raw.propertyNo && !raw.oldPropertyNo) {
     raw.oldPropertyNo = raw.propertyNo;
@@ -52,11 +60,21 @@ function migrateWizardDraft(
         clientOwnerId: newOwnerRow().clientOwnerId,
         name: raw.ownerName,
         fatherOrHusbandName: raw.fatherOrHusbandName,
+        mobileNo: raw.mobileNo,
+        altMobileNo: raw.altMobileNo,
       },
     ];
+  } else if (raw.owners?.length && raw.mobileNo && !raw.owners[0]?.mobileNo) {
+    raw.owners[0] = {
+      ...raw.owners[0]!,
+      mobileNo: raw.mobileNo,
+      altMobileNo: raw.altMobileNo ?? raw.owners[0]!.altMobileNo,
+    };
   }
   delete raw.ownerName;
   delete raw.fatherOrHusbandName;
+  delete raw.mobileNo;
+  delete raw.altMobileNo;
   return raw;
 }
 
@@ -84,8 +102,6 @@ export interface WizardDraft {
   relationship?: string;
   owners?: WizardOwnerRow[];
   familySize?: number;
-  mobileNo?: string;
-  altMobileNo?: string;
 
   // Step 3 — Address
   houseNo?: string;
@@ -186,7 +202,12 @@ export function surveyToDraft(survey: {
   isSlum: boolean;
   respondentName?: string;
   relationship?: string;
-  owners?: Array<{ name?: string; fatherOrHusbandName?: string }>;
+  owners?: Array<{
+    name?: string;
+    fatherOrHusbandName?: string;
+    mobileNo?: string;
+    altMobileNo?: string;
+  }>;
   familySize?: number;
   mobileNo: string;
   altMobileNo?: string;
@@ -243,15 +264,30 @@ export function surveyToDraft(survey: {
     isSlum: survey.isSlum,
     respondentName: survey.respondentName,
     relationship: survey.relationship,
-    owners:
-      survey.owners?.map((o, i) => ({
-        clientOwnerId: `ow_${i}_${survey.localId}`,
-        name: o.name,
-        fatherOrHusbandName: o.fatherOrHusbandName,
-      })) ?? [],
+    owners: (() => {
+      const rows =
+        survey.owners?.map((o, i) => ({
+          clientOwnerId: `ow_${i}_${survey.localId}`,
+          name: o.name,
+          fatherOrHusbandName: o.fatherOrHusbandName,
+          mobileNo: o.mobileNo,
+          altMobileNo: o.altMobileNo,
+        })) ?? [];
+      if (rows.length === 0 && survey.mobileNo) {
+        return [
+          {
+            clientOwnerId: newOwnerRow().clientOwnerId,
+            mobileNo: survey.mobileNo,
+            altMobileNo: survey.altMobileNo,
+          },
+        ];
+      }
+      if (rows.length > 0 && survey.mobileNo && !rows[0]!.mobileNo) {
+        rows[0] = { ...rows[0]!, mobileNo: survey.mobileNo, altMobileNo: survey.altMobileNo ?? rows[0]!.altMobileNo };
+      }
+      return rows;
+    })(),
     familySize: survey.familySize,
-    mobileNo: survey.mobileNo,
-    altMobileNo: survey.altMobileNo,
     houseNo: survey.houseNo,
     street: survey.street,
     locality: survey.locality,
@@ -299,7 +335,13 @@ export async function listDrafts(): Promise<WizardDraft[]> {
     .map(([, v]) =>
       v
         ? migrateWizardDraft(
-            JSON.parse(v) as WizardDraft & { propertyNo?: string; ownerName?: string; fatherOrHusbandName?: string },
+            JSON.parse(v) as WizardDraft & {
+              propertyNo?: string;
+              ownerName?: string;
+              fatherOrHusbandName?: string;
+              mobileNo?: string;
+              altMobileNo?: string;
+            },
           )
         : null,
     )
@@ -332,6 +374,8 @@ export function useWizardDraft(localId: string | undefined) {
                 propertyNo?: string;
                 ownerName?: string;
                 fatherOrHusbandName?: string;
+                mobileNo?: string;
+                altMobileNo?: string;
               },
             ),
           );
@@ -373,7 +417,7 @@ export function draftToUpsertArgs(d: WizardDraft) {
     !d.wardNo ||
     !d.parcelNo?.trim() ||
     !d.unitNo?.trim() ||
-    !d.mobileNo ||
+    !primaryOwnerMobileFromDraft(d) ||
     !d.houseNo ||
     !d.street ||
     !d.city ||
@@ -410,13 +454,15 @@ export function draftToUpsertArgs(d: WizardDraft) {
         ?.map((o) => ({
           name: o.name?.trim() || undefined,
           fatherOrHusbandName: o.fatherOrHusbandName?.trim() || undefined,
+          mobileNo: o.mobileNo?.trim() || undefined,
+          altMobileNo: o.altMobileNo?.trim() || undefined,
         }))
-        .filter((o) => o.name || o.fatherOrHusbandName);
+        .filter((o) => o.name || o.fatherOrHusbandName || o.mobileNo || o.altMobileNo);
       return cleaned?.length ? cleaned : undefined;
     })(),
     familySize: d.familySize,
-    mobileNo: d.mobileNo,
-    altMobileNo: d.altMobileNo?.trim() || undefined,
+    mobileNo: primaryOwnerMobileFromDraft(d) ?? '',
+    altMobileNo: d.owners?.[0]?.altMobileNo?.trim() || undefined,
     houseNo: d.houseNo,
     street: d.street,
     locality: d.locality,
@@ -440,11 +486,29 @@ export function draftToUpsertArgs(d: WizardDraft) {
   };
 }
 
-/** Owner step: primary mobile required; alternate validated when entered. */
+function primaryOwnerMobileFromDraft(d: WizardDraft): string | undefined {
+  if (!d.owners?.length) return undefined;
+  for (const o of d.owners) {
+    const m = o.mobileNo?.trim();
+    if (m && isValidIndianMobile(m)) return m;
+  }
+  return undefined;
+}
+
+/** Owner step: first owner mobile required; other rows validated when filled. */
 export function ownerStepComplete(d: WizardDraft): boolean {
-  if (!d.mobileNo || !isValidIndianMobile(d.mobileNo)) return false;
-  if (d.altMobileNo) {
-    if (!isValidIndianMobile(d.altMobileNo) || d.altMobileNo === d.mobileNo) return false;
+  const owners = d.owners ?? [];
+  if (!owners.length) return false;
+  const primary = owners[0]?.mobileNo?.trim();
+  if (!primary || !isValidIndianMobile(primary)) return false;
+  for (const o of owners) {
+    const mobile = o.mobileNo?.trim();
+    if (mobile && !isValidIndianMobile(mobile)) return false;
+    const alt = o.altMobileNo?.trim();
+    if (alt) {
+      if (!isValidIndianMobile(alt)) return false;
+      if (alt === mobile) return false;
+    }
   }
   if (d.familySize != null && (!Number.isInteger(d.familySize) || d.familySize < 1)) return false;
   return true;

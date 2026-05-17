@@ -234,15 +234,26 @@ export default function ReviewScreen() {
             </>
           ) : null}
           {(draft.owners ?? [])
-            .filter((o) => o.name?.trim() || o.fatherOrHusbandName?.trim())
+            .filter(
+              (o) => o.name?.trim() || o.fatherOrHusbandName?.trim() || o.mobileNo?.trim() || o.altMobileNo?.trim(),
+            )
             .map((o, i) => (
               <View key={o.clientOwnerId}>
                 <Divider />
                 <ListRow
                   icon="home-outline"
                   iconTone="neutral"
-                  title={draft.owners!.length > 1 ? `Owner ${i + 1}` : 'Owner name'}
-                  subtitle={[o.name?.trim(), o.fatherOrHusbandName?.trim()].filter(Boolean).join(' · ') || '—'}
+                  title={(draft.owners?.length ?? 0) > 1 ? `Owner ${i + 1}` : 'Owner'}
+                  subtitle={
+                    [
+                      o.name?.trim(),
+                      o.fatherOrHusbandName?.trim(),
+                      o.mobileNo?.trim() ? `M: ${o.mobileNo.trim()}` : null,
+                      o.altMobileNo?.trim() ? `Alt: ${o.altMobileNo.trim()}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ') || '—'
+                  }
                   showChevron={false}
                 />
               </View>
@@ -255,26 +266,6 @@ export default function ReviewScreen() {
                 iconTone="neutral"
                 title="Family members"
                 subtitle={`${draft.familySize}`}
-                showChevron={false}
-              />
-            </>
-          ) : null}
-          <Divider />
-          <ListRow
-            icon="call-outline"
-            iconTone="neutral"
-            title="Mobile"
-            subtitle={draft.mobileNo ?? '—'}
-            showChevron={false}
-          />
-          {draft.altMobileNo ? (
-            <>
-              <Divider />
-              <ListRow
-                icon="call-outline"
-                iconTone="neutral"
-                title="Alternate mobile"
-                subtitle={draft.altMobileNo}
                 showChevron={false}
               />
             </>

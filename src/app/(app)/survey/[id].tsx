@@ -145,15 +145,26 @@ export default function SurveyDetailScreen() {
             </>
           ) : null}
           {(survey.owners ?? [])
-            .filter((o) => o.name?.trim() || o.fatherOrHusbandName?.trim())
+            .filter(
+              (o) => o.name?.trim() || o.fatherOrHusbandName?.trim() || o.mobileNo?.trim() || o.altMobileNo?.trim(),
+            )
             .map((o, i) => (
               <View key={`${o.name ?? ''}-${i}`}>
                 <View className="h-px bg-line-subtle" />
                 <ListRow
                   icon="home-outline"
                   iconTone="neutral"
-                  title={(survey.owners?.length ?? 0) > 1 ? `Owner ${i + 1}` : 'Owner name'}
-                  subtitle={[o.name?.trim(), o.fatherOrHusbandName?.trim()].filter(Boolean).join(' · ') || '—'}
+                  title={(survey.owners?.length ?? 0) > 1 ? `Owner ${i + 1}` : 'Owner'}
+                  subtitle={
+                    [
+                      o.name?.trim(),
+                      o.fatherOrHusbandName?.trim(),
+                      o.mobileNo?.trim() ? `M: ${o.mobileNo.trim()}` : null,
+                      o.altMobileNo?.trim() ? `Alt: ${o.altMobileNo.trim()}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ') || '—'
+                  }
                   showChevron={false}
                 />
               </View>
@@ -170,22 +181,14 @@ export default function SurveyDetailScreen() {
               />
             </>
           ) : null}
-          <View className="h-px bg-line-subtle" />
-          <ListRow
-            icon="call-outline"
-            iconTone="neutral"
-            title="Mobile"
-            subtitle={survey.mobileNo}
-            showChevron={false}
-          />
-          {survey.altMobileNo ? (
+          {!survey.owners?.some((o) => o.mobileNo?.trim()) && survey.mobileNo ? (
             <>
               <View className="h-px bg-line-subtle" />
               <ListRow
                 icon="call-outline"
                 iconTone="neutral"
-                title="Alternate mobile"
-                subtitle={survey.altMobileNo}
+                title="Mobile"
+                subtitle={survey.mobileNo}
                 showChevron={false}
               />
             </>
