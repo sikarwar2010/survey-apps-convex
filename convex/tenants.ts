@@ -105,6 +105,7 @@ export const upsertMunicipality = mutation({
     code: v.string(),
     name: v.string(),
     bodyType: ulbBodyType,
+    postalCode: v.optional(v.string()),
     isActive: v.boolean(),
   },
   handler: async (ctx, args) => {
@@ -116,6 +117,11 @@ export const upsertMunicipality = mutation({
 
     const code = args.code.trim().toUpperCase();
     if (!code) clientError('BAD_REQUEST', 'ULB code is required');
+
+    const postalCode = args.postalCode?.replace(/\D/g, '').slice(0, 6);
+    if (postalCode && !/^[1-9]\d{5}$/.test(postalCode)) {
+      clientError('BAD_REQUEST', 'Postal code must be 6 digits, not starting with 0');
+    }
 
     const dup = await ctx.db
       .query('municipalities')
@@ -130,6 +136,7 @@ export const upsertMunicipality = mutation({
       code,
       name: args.name.trim(),
       bodyType: args.bodyType,
+      postalCode: postalCode || undefined,
       isActive: args.isActive,
     };
 
@@ -327,6 +334,7 @@ export const seedReferenceData = mutation({
       code: string;
       name: string;
       bodyType: 'municipal_council' | 'town_panchayat';
+      postalCode: string;
       wards: Array<{ wardNo: string; wardCode: string; name: string }>;
     };
 
@@ -343,6 +351,7 @@ export const seedReferenceData = mutation({
             code: 'AGR-MC-001',
             name: 'Agra Municipal Corporation',
             bodyType: 'municipal_council',
+            postalCode: '282001',
             wards: [
               { wardNo: '1', wardCode: 'AGR-W01', name: 'Tajganj' },
               { wardNo: '2', wardCode: 'AGR-W02', name: 'Sadar' },
@@ -352,6 +361,7 @@ export const seedReferenceData = mutation({
             code: 'AGR-TP-FATEHABAD',
             name: 'Fatehabad Town Panchayat',
             bodyType: 'town_panchayat',
+            postalCode: '283111',
             wards: [{ wardNo: '1', wardCode: 'AGR-FTH-W01', name: 'Fatehabad' }],
           },
         ],
@@ -364,6 +374,7 @@ export const seedReferenceData = mutation({
             code: 'ETA-MC-001',
             name: 'Etah Municipal Council',
             bodyType: 'municipal_council',
+            postalCode: '207001',
             wards: [
               { wardNo: '1', wardCode: 'ETA-W01', name: 'Kotwali' },
               { wardNo: '2', wardCode: 'ETA-W02', name: 'Station Road' },
@@ -373,6 +384,7 @@ export const seedReferenceData = mutation({
             code: 'ETA-TP-JALESAR',
             name: 'Jalesar Town Panchayat',
             bodyType: 'town_panchayat',
+            postalCode: '207302',
             wards: [{ wardNo: '1', wardCode: 'ETA-JAL-W01', name: 'Jalesar' }],
           },
         ],
@@ -385,12 +397,14 @@ export const seedReferenceData = mutation({
             code: 'BAG-MC-001',
             name: 'Baghpat Municipal Council',
             bodyType: 'municipal_council',
+            postalCode: '250609',
             wards: [{ wardNo: '1', wardCode: 'BAG-W01', name: 'Main' }],
           },
           {
             code: 'BAG-TP-BARAUT',
             name: 'Baraut Town Panchayat',
             bodyType: 'town_panchayat',
+            postalCode: '250611',
             wards: [{ wardNo: '1', wardCode: 'BAG-BRT-W01', name: 'Baraut' }],
           },
         ],
@@ -403,6 +417,7 @@ export const seedReferenceData = mutation({
             code: 'MAIN-MC-001',
             name: 'Mainpuri Municipal Council',
             bodyType: 'municipal_council',
+            postalCode: '205001',
             wards: [
               { wardNo: '1', wardCode: 'MAIN-W01', name: 'Civil Lines' },
               { wardNo: '2', wardCode: 'MAIN-W02', name: 'Railway Colony' },
@@ -412,6 +427,7 @@ export const seedReferenceData = mutation({
             code: 'MAIN-TP-BHONGAON',
             name: 'Bhongaon Town Panchayat',
             bodyType: 'town_panchayat',
+            postalCode: '205262',
             wards: [{ wardNo: '1', wardCode: 'MAIN-BHO-W01', name: 'Bhongaon' }],
           },
         ],
@@ -424,12 +440,14 @@ export const seedReferenceData = mutation({
             code: 'KAS-MC-001',
             name: 'Kasganj Municipal Council',
             bodyType: 'municipal_council',
+            postalCode: '207123',
             wards: [{ wardNo: '1', wardCode: 'KAS-W01', name: 'Sadar' }],
           },
           {
             code: 'KAS-TP-SORON',
             name: 'Soron Town Panchayat',
             bodyType: 'town_panchayat',
+            postalCode: '207403',
             wards: [{ wardNo: '1', wardCode: 'KAS-SOR-W01', name: 'Soron' }],
           },
         ],
@@ -472,6 +490,7 @@ export const seedReferenceData = mutation({
             districtId,
             name: u.name,
             bodyType: u.bodyType,
+            postalCode: u.postalCode,
             isActive: true,
           });
         } else {
@@ -480,6 +499,7 @@ export const seedReferenceData = mutation({
             name: u.name,
             bodyType: u.bodyType,
             districtId,
+            postalCode: u.postalCode,
             isActive: true,
           });
         }

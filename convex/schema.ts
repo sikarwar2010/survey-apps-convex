@@ -115,6 +115,8 @@ export default defineSchema({
     name: v.string(),
     bodyType: ulbBodyType,
     districtId: v.id('districts'),
+    /** Admin-assigned postal code for surveys in this ULB (6 digits). */
+    postalCode: v.optional(v.string()),
     isActive: v.boolean(),
   })
     .index('by_code', ['code'])
@@ -178,9 +180,10 @@ export default defineSchema({
     altMobileNo: v.optional(v.string()),
 
     // Section 3 — Address
-    houseNo: v.string(),
-    street: v.string(),
-    locality: v.optional(v.string()),
+    houseNo: v.optional(v.string()),
+    locality: v.string(),
+    colonyName: v.string(),
+    /** Denormalized ULB name (city / town). */
     city: v.string(),
     pinCode: v.string(),
 

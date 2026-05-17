@@ -105,8 +105,8 @@ export interface WizardDraft {
 
   // Step 3 — Address
   houseNo?: string;
-  street?: string;
   locality?: string;
+  colonyName?: string;
   city?: string;
   pinCode?: string;
 
@@ -211,9 +211,9 @@ export function surveyToDraft(survey: {
   familySize?: number;
   mobileNo: string;
   altMobileNo?: string;
-  houseNo: string;
-  street: string;
-  locality?: string;
+  houseNo?: string;
+  locality: string;
+  colonyName: string;
   city: string;
   pinCode: string;
   assessmentYear: string;
@@ -289,8 +289,8 @@ export function surveyToDraft(survey: {
     })(),
     familySize: survey.familySize,
     houseNo: survey.houseNo,
-    street: survey.street,
     locality: survey.locality,
+    colonyName: survey.colonyName,
     city: survey.city,
     pinCode: survey.pinCode,
     assessmentYear: survey.assessmentYear,
@@ -418,9 +418,8 @@ export function draftToUpsertArgs(d: WizardDraft) {
     !d.parcelNo?.trim() ||
     !d.unitNo?.trim() ||
     !primaryOwnerMobileFromDraft(d) ||
-    !d.houseNo ||
-    !d.street ||
-    !d.city ||
+    !d.locality?.trim() ||
+    !d.colonyName?.trim() ||
     !d.pinCode ||
     !d.assessmentYear ||
     !d.ownershipType ||
@@ -463,10 +462,10 @@ export function draftToUpsertArgs(d: WizardDraft) {
     familySize: d.familySize,
     mobileNo: primaryOwnerMobileFromDraft(d) ?? '',
     altMobileNo: d.owners?.[0]?.altMobileNo?.trim() || undefined,
-    houseNo: d.houseNo,
-    street: d.street,
-    locality: d.locality,
-    city: d.city,
+    houseNo: d.houseNo?.trim() || undefined,
+    locality: d.locality.trim(),
+    colonyName: d.colonyName.trim(),
+    city: d.city?.trim() || '',
     pinCode: d.pinCode,
     assessmentYear: d.assessmentYear,
     ownershipType: d.ownershipType,
@@ -523,7 +522,7 @@ export function stepCompletion(d: WizardDraft) {
     start: !!(d.assessmentYear && d.districtId && d.municipalityId),
     property: !!(d.wardNo && d.parcelNo?.trim() && d.unitNo?.trim()),
     owner: ownerStepComplete(d),
-    address: !!(d.houseNo && d.street && d.city && d.pinCode),
+    address: !!(d.locality?.trim() && d.colonyName?.trim() && d.pinCode),
     taxation: !!(
       d.ownershipType &&
       d.propertyType &&

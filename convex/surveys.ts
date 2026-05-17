@@ -10,6 +10,7 @@
 import { ConvexError, v } from 'convex/values';
 import type { Doc, Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
+import { addressTenantContext, normalizeAddressFields, validateAddressSection } from './addressRules';
 import { assertCanReadWard, clientError, requireRole, requireUser, writeAudit } from './helpers';
 import { normalizeOwners, primaryOwnerMobile, validateOwnerSection } from './ownerRules';
 import { gpsCapture, qcStatus, surveyOwnerEntry, surveyStatus } from './schema';
@@ -36,11 +37,13 @@ const surveyInput = {
   mobileNo: v.string(),
   altMobileNo: v.optional(v.string()),
 
-  houseNo: v.string(),
-  street: v.string(),
-  locality: v.optional(v.string()),
-  city: v.string(),
+  houseNo: v.optional(v.string()),
+  locality: v.string(),
+  colonyName: v.optional(v.string()),
   pinCode: v.string(),
+  city: v.optional(v.string()),
+  /** @deprecated — mapped to colonyName on upsert */
+  street: v.optional(v.string()),
 
   assessmentYear: v.string(),
   ownershipType: v.string(),
@@ -224,8 +227,13 @@ export const upsert = mutation({
     const muni = await assertMunicipalityInScope(ctx, me, args.municipalityId);
     assertCanReadWard(me, args.municipalityId, args.wardNo);
 
-    const normalized = normalizeOwnerFields(normalizePropertyFields(args));
-    validateBusinessRules(normalized);
+    const district = await ctx.db.get(muni.districtId);
+    const addressCtx = {
+      ...addressTenantContext(muni, district),
+      configuredPostalCode: muni.postalCode,
+    };
+    const normalized = normalizeAddressFields(normalizeOwnerFields(normalizePropertyFields(args)), muni);
+    validateBusinessRules(normalized, addressCtx);
 
     // Confirm ward exists within the municipality
     const ward = await ctx.db
@@ -452,7 +460,10 @@ function stripLocalId<T extends { localId: string; surveyorId?: Id<'users'> }>(a
   return rest;
 }
 
-function validateBusinessRules(in_: Record<string, unknown>): void {
+function validateBusinessRules(
+  in_: Record<string, unknown>,
+  addressCtx: Parameters<typeof validateAddressSection>[1],
+): void {
   const details: Record<string, string[]> = {};
 
   Object.assign(
@@ -462,9 +473,19 @@ function validateBusinessRules(in_: Record<string, unknown>): void {
       owners: in_.owners as Parameters<typeof validateOwnerSection>[0]['owners'],
     }),
   );
-  if (!/^[1-9]\d{5}$/.test(in_.pinCode as unknown as string)) {
-    details.pinCode = ['PIN must be 6 digits, not starting with 0'];
-  }
+  Object.assign(
+    details,
+    validateAddressSection(
+      {
+        houseNo: in_.houseNo as string | undefined,
+        locality: in_.locality as string,
+        colonyName: in_.colonyName as string,
+        city: in_.city as string,
+        pinCode: in_.pinCode as string,
+      },
+      addressCtx,
+    ),
+  );
   const plot = in_.plotSqft as unknown as number;
   const plinth = in_.plinthSqft as unknown as number;
   if (typeof plot === 'number' && typeof plinth === 'number' && plinth > plot) {

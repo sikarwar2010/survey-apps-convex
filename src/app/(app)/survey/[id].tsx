@@ -198,8 +198,7 @@ export default function SurveyDetailScreen() {
         <SectionLabel>Address</SectionLabel>
         <AppCard padded className="mb-3">
           <Text className="text-body text-ink-primary-light dark:text-ink-primary-dark">
-            {survey.houseNo}, {survey.street}
-            {survey.locality ? `, ${survey.locality}` : ''}
+            {[survey.houseNo, survey.colonyName, survey.locality].filter(Boolean).join(', ')}
           </Text>
           <Text className="text-helper text-ink-tertiary-light dark:text-ink-tertiary-dark mt-1">
             {survey.city} — {survey.pinCode}

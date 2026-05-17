@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as addressRules from "../addressRules.js";
 import type * as admin from "../admin.js";
 import type * as env from "../env.js";
 import type * as errors from "../errors.js";
@@ -31,6 +32,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  addressRules: typeof addressRules;
   admin: typeof admin;
   env: typeof env;
   errors: typeof errors;

@@ -56,6 +56,7 @@ export const bundle = query({
         districtName: d?.name ?? '',
         districtCode: d?.code ?? '',
         stateName: d?.stateName ?? '',
+        postalCode: m.postalCode ?? null,
       };
     });
 

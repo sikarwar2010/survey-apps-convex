@@ -275,7 +275,7 @@ export default function ReviewScreen() {
         <SectionLabel>Address</SectionLabel>
         <AppCard padded className="mb-3">
           <Text className="text-body text-ink-primary-light dark:text-ink-primary-dark">
-            {[draft.houseNo, draft.street, draft.locality].filter(Boolean).join(', ')}
+            {[draft.houseNo, draft.colonyName, draft.locality].filter(Boolean).join(', ')}
           </Text>
           <Text className="text-helper text-ink-tertiary-light mt-1">
             {draft.city} — {draft.pinCode}
