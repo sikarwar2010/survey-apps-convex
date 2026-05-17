@@ -6,10 +6,10 @@
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import {
-  internalMutation,
-  mutation,
-  type MutationCtx,
-  query,
+    internalMutation,
+    mutation,
+    type MutationCtx,
+    query,
 } from "./_generated/server";
 import { clientError, requireIdentity, writeAudit } from "./helpers";
 
@@ -20,10 +20,28 @@ export const currentUser = query({
     const ident = await ctx.auth.getUserIdentity();
     if (!ident) return null;
 
-    return await ctx.db
+    const user = await ctx.db
       .query("users")
       .withIndex("by_clerkId", (q) => q.eq("clerkId", ident.subject))
       .unique();
+
+    if (!user) return null;
+
+    let municipality: { code: string; name: string } | null = null;
+    let district: { code: string; name: string } | null = null;
+
+    if (user.municipalityId) {
+      const muni = await ctx.db.get(user.municipalityId);
+      if (muni) {
+        municipality = { code: muni.code, name: muni.name };
+        const dist = await ctx.db.get(muni.districtId);
+        if (dist) {
+          district = { code: dist.code, name: dist.name };
+        }
+      }
+    }
+
+    return { ...user, municipality, district };
   },
 });
 

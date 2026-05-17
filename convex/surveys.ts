@@ -17,7 +17,7 @@ import {
   requireUser,
   writeAudit,
 } from "./helpers";
-import { gpsCapture, surveyStatus } from "./schema";
+import { gpsCapture, qcStatus, surveyStatus } from "./schema";
 
 /* ────────────────────────── shared input validator ────────────────────────── */
 
@@ -70,6 +70,7 @@ const surveyInput = {
 export const list = query({
   args: {
     status: v.optional(surveyStatus),
+    qcStatus: v.optional(qcStatus),
     wardNo: v.optional(v.string()),
     limit: v.optional(v.number()),
   },
@@ -103,6 +104,9 @@ export const list = query({
     // Apply remaining filters in memory — they're small once the index has narrowed.
     if (args.status && me.role !== "supervisor") {
       rows = rows.filter((r) => r.status === args.status);
+    }
+    if (args.qcStatus) {
+      rows = rows.filter((r) => r.qcStatus === args.qcStatus);
     }
     if (args.wardNo) {
       rows = rows.filter((r) => r.wardNo === args.wardNo);
@@ -252,9 +256,35 @@ export const upsert = mutation({
   },
 });
 
+/** Attach or refresh GPS on a draft survey before submit. */
+export const setGps = mutation({
+  args: { id: v.id("surveys"), gps: gpsCapture },
+  handler: async (ctx, args) => {
+    const me = await requireUser(ctx);
+    const survey = await ctx.db.get(args.id);
+    if (!survey) clientError("NOT_FOUND", "Survey not found");
+    if (survey.surveyorId !== me._id && me.role === "surveyor") {
+      clientError("FORBIDDEN", "Not your survey");
+    }
+    assertCanReadWard(me, survey.municipalityId, survey.wardNo);
+    if (survey.qcStatus === "approved" && me.role === "surveyor") {
+      clientError("LOCKED", "Survey is locked");
+    }
+    if (args.gps.accuracyMeters > 500) {
+      clientError("VALIDATION", "GPS accuracy too poor; retake outside", {
+        gps: ["GPS accuracy too poor; retake outside"],
+      });
+    }
+    await ctx.db.patch(args.id, {
+      gps: args.gps,
+      serverVersion: survey.serverVersion + 1,
+    });
+  },
+});
+
 /**
  * Transitions a draft to `submitted`. Requires at least one floor and
- * both required photos (front + inside).
+ * both required photos (front + side).
  */
 export const submit = mutation({
   args: { id: v.id("surveys") },
@@ -265,7 +295,7 @@ export const submit = mutation({
     if (survey.surveyorId !== me._id && me.role === "surveyor") {
       clientError("FORBIDDEN", "Not your survey");
     }
-    if (survey.status !== "draft") {
+    if (survey.status !== "draft" && survey.status !== "rejected") {
       clientError("BAD_STATE", "Only drafts can be submitted");
     }
 
@@ -294,6 +324,7 @@ export const submit = mutation({
 
     await ctx.db.patch(args.id, {
       status: "submitted",
+      qcStatus: survey.qcStatus === "rejected" ? "pending" : survey.qcStatus,
       submittedAt: Date.now(),
       serverVersion: survey.serverVersion + 1,
     });

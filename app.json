@@ -42,7 +42,19 @@
       "expo-secure-store",
       "expo-web-browser",
       "expo-font",
-      "expo-image"
+      "expo-image",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to take survey photos."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow $(PRODUCT_NAME) to capture property GPS for surveys."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

@@ -159,7 +159,8 @@ export const decide = mutation({
 
     await ctx.db.patch(args.surveyId, {
       qcStatus: args.decision === "approve" ? "approved" : "rejected",
-      status: args.decision === "approve" ? "approved" : "rejected",
+      // Rejection returns the survey to draft so the surveyor can edit and resubmit.
+      status: args.decision === "approve" ? "approved" : "draft",
       serverVersion: survey.serverVersion + 1,
     });
 

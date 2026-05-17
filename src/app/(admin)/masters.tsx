@@ -1,246 +1,240 @@
 /**
- * Approval detail — admin picks role + municipality + wards, then approves.
- *
- * `useMutation` returns the result of `admin.approveUser`. On success
- * we pop back; the row disappears from the approvals list reactively.
+ * Master data overview — municipalities, wards, and lookup dropdowns.
  */
+import { AppCard, EmptyState, SectionLabel, Spinner, Tag } from "@/components";
+import { AdminHeader } from "@/components/admin/admin-header";
+import { api } from "@/convex/_generated/api";
+import { Ionicons } from "@expo/vector-icons";
+import { useQuery } from "convex/react";
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { useMutation, useQuery } from "convex/react";
-import { Ionicons } from "@expo/vector-icons";
-import {
-  AppButton,
-  AppCard,
-  AppDropdown,
-  Avatar,
-  Banner,
-  RadioGroup,
-  SectionLabel,
-  Spinner,
-  Tag,
-  Toast,
-} from "@/components";
-import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
-import { toUserMessage } from "@/utils/errors";
 
-type Role = "surveyor" | "supervisor" | "admin";
+type MastersTab = "tenants" | "lookups";
 
-export default function ApproveDetailScreen() {
-  const router = useRouter();
-  const params = useLocalSearchParams<{ userId?: string }>();
-  const userId = params.userId as Id<"users"> | undefined;
+const LOOKUP_GROUPS: {
+  key:
+    | "propertyTypes"
+    | "propertyUses"
+    | "ownershipTypes"
+    | "assessmentYears"
+    | "roadTypes"
+    | "taxRateZones"
+    | "situations"
+    | "relationships"
+    | "waterSources"
+    | "sanitationTypes"
+    | "solidWasteTypes"
+    | "usageTypes"
+    | "constructionTypes"
+    | "floors";
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+}[] = [
+  { key: "propertyTypes", label: "Property types", icon: "home-outline" },
+  { key: "propertyUses", label: "Property uses", icon: "construct-outline" },
+  { key: "ownershipTypes", label: "Ownership", icon: "key-outline" },
+  { key: "assessmentYears", label: "Assessment years", icon: "calendar-outline" },
+  { key: "roadTypes", label: "Road types", icon: "trail-sign-outline" },
+  { key: "taxRateZones", label: "Tax zones", icon: "layers-outline" },
+  { key: "situations", label: "Situations", icon: "compass-outline" },
+  { key: "relationships", label: "Relationships", icon: "people-outline" },
+  { key: "waterSources", label: "Water sources", icon: "water-outline" },
+  { key: "sanitationTypes", label: "Sanitation", icon: "medkit-outline" },
+  { key: "solidWasteTypes", label: "Solid waste", icon: "trash-outline" },
+  { key: "usageTypes", label: "Usage types", icon: "grid-outline" },
+  { key: "constructionTypes", label: "Construction", icon: "hammer-outline" },
+  { key: "floors", label: "Floors", icon: "business-outline" },
+];
 
+export default function AdminMastersScreen() {
+  const [tab, setTab] = useState<MastersTab>("tenants");
+  const [expandedMuni, setExpandedMuni] = useState<string | null>(null);
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const masters = useQuery(api.masters.bundle, {});
-  const pendingList = useQuery(api.admin.listPendingApprovals, {});
-  const approve = useMutation(api.admin.approveUser);
 
-  const user = pendingList?.find((u) => u._id === userId);
-
-  const [role, setRole] = useState<Role>("surveyor");
-  const [municipalityCode, setMunicipalityCode] = useState<string>("");
-  const [selectedWards, setSelectedWards] = useState<string[]>([]);
-  const [submitting, setSubmitting] = useState(false);
-  const [toast, setToast] = useState<{ title: string; tone: "success" | "danger" } | null>(null);
-
-  const muniOptions = useMemo(
-    () =>
-      masters?.ulbs.map((m) => ({ value: m.code, label: `${m.name} · ${m.districtName}` })) ?? [],
-    [masters],
-  );
-  const selectedMuni = masters?.ulbs.find((m) => m.code === municipalityCode);
-  const wardsForMuni = useMemo(
-    () => (selectedMuni ? masters?.wards.filter((w) => w.municipalityCode === municipalityCode) ?? [] : []),
-    [masters, municipalityCode, selectedMuni],
-  );
-
-  if (!userId) {
-    return (
-      <View className="flex-1 items-center justify-center bg-page-light dark:bg-page-dark">
-        <Text className="text-helper text-ink-tertiary-light">No user selected</Text>
-      </View>
-    );
-  }
-  if (pendingList === undefined || masters === undefined) {
-    return <Spinner label="Loading…" />;
-  }
-  if (!user) {
-    return (
-      <View className="flex-1 items-center justify-center bg-page-light dark:bg-page-dark p-6">
-        <Ionicons name="checkmark-circle" size={48} color="#16A34A" />
-        <Text className="text-h2 font-medium text-ink-primary-light dark:text-ink-primary-dark mt-3">
-          Already processed
-        </Text>
-        <AppButton label="Back to approvals" onPress={() => router.back()} className="mt-6" />
-      </View>
-    );
-  }
-
-  const toggleWard = (wardNo: string) => {
-    setSelectedWards((prev) =>
-      prev.includes(wardNo) ? prev.filter((w) => w !== wardNo) : [...prev, wardNo],
-    );
-  };
-
-  const handleApprove = async () => {
-    setSubmitting(true);
-    try {
-      await approve({
-        userId,
-        role,
-        municipalityId: selectedMuni?._id,
-        wardAssignments: selectedWards,
-      });
-      setToast({ title: `${user.name} approved`, tone: "success" });
-      setTimeout(() => router.back(), 700);
-    } catch (e) {
-      setToast({ title: toUserMessage(e), tone: "danger" });
-    } finally {
-      setSubmitting(false);
+  const wardsByMuni = useMemo(() => {
+    type WardRow = NonNullable<typeof masters>["wards"][number];
+    const map = new Map<string, WardRow[]>();
+    if (!masters) return map;
+    for (const w of masters.wards) {
+      const list = map.get(w.municipalityCode) ?? [];
+      list.push(w);
+      map.set(w.municipalityCode, list);
     }
-  };
+    return map;
+  }, [masters]);
 
-  const canSubmit =
-    role === "admin" ||
-    (!!selectedMuni && (role === "supervisor" || selectedWards.length > 0));
+  const lookupCount = useMemo(() => {
+    if (!masters) return 0;
+    return LOOKUP_GROUPS.reduce((sum, g) => sum + (masters[g.key]?.length ?? 0), 0);
+  }, [masters]);
+
+  if (masters === undefined) {
+    return (
+      <View className="flex-1 bg-page-light dark:bg-page-dark">
+        <AdminHeader variant="surface" eyebrow="" title="Masters" subtitle="Loading reference data…" />
+        <Spinner label="Loading masters…" />
+      </View>
+    );
+  }
 
   return (
     <View className="flex-1 bg-page-light dark:bg-page-dark">
-      <SafeAreaView edges={["top"]} className="bg-brand">
-        <View className="px-4 pt-2 pb-3 flex-row items-center">
-          <Pressable onPress={() => router.back()} hitSlop={6} className="w-9 h-9 items-center justify-center">
-            <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
-          </Pressable>
-          <Text className="text-h3 font-medium text-white ml-1">Review request</Text>
-        </View>
-      </SafeAreaView>
-
-      <ScrollView contentContainerStyle={{ padding: 14, paddingBottom: 32 }}>
-        <AppCard padded className="mb-4">
-          <View className="flex-row items-center">
-            <Avatar name={user.name} tone="brand" size="lg" />
-            <View className="flex-1 ml-3">
-              <Text className="text-h3 font-medium text-ink-primary-light dark:text-ink-primary-dark">
-                {user.name}
-              </Text>
-              <Text className="text-helper text-ink-tertiary-light dark:text-ink-tertiary-dark">
-                {user.email}
-              </Text>
-            </View>
-          </View>
-          <View className="flex-row gap-1.5 mt-3">
-            <Tag label={`Requested: ${user.requestedRole ?? "—"}`} tone="brand" icon="briefcase-outline" />
-          </View>
-          {user.requestedReason ? (
-            <View className="mt-3 p-3 bg-page-light dark:bg-page-dark/40 rounded-lg">
-              <Text className="text-caption text-ink-secondary-light dark:text-ink-secondary-dark italic">
-                "{user.requestedReason}"
-              </Text>
-            </View>
-          ) : null}
-        </AppCard>
-
-        <SectionLabel>Grant role</SectionLabel>
-        <AppCard padded className="mb-4">
-          <RadioGroup<Role>
-            items={[
-              { value: "surveyor", label: "Surveyor", helper: "Field surveyor — limited to assigned wards" },
-              { value: "supervisor", label: "Supervisor", helper: "QC reviewer — ULB-wide access" },
-              { value: "admin", label: "Admin", helper: "Platform admin — no tenant restriction" },
-            ]}
-            value={role}
-            onChange={(r) => {
-              setRole(r);
-              if (r === "admin") {
-                setMunicipalityCode("");
-                setSelectedWards([]);
-              }
-            }}
-          />
-        </AppCard>
-
-        {role !== "admin" ? (
-          <>
-            <SectionLabel>Municipality</SectionLabel>
-            <View className="mb-4">
-              <AppDropdown
-                placeholder="Select a municipality"
-                value={municipalityCode}
-                options={muniOptions}
-                onChange={(v) => {
-                  setMunicipalityCode(v);
-                  setSelectedWards([]);
-                }}
-              />
-            </View>
-
-            {role === "surveyor" && selectedMuni ? (
-              <>
-                <SectionLabel>Ward assignments</SectionLabel>
-                <AppCard padded className="mb-4">
-                  {wardsForMuni.length === 0 ? (
-                    <Text className="text-caption text-ink-tertiary-light">
-                      No wards configured for this municipality yet.
-                    </Text>
-                  ) : (
-                    <View className="flex-row flex-wrap gap-1.5">
-                      {wardsForMuni.map((w) => {
-                        const active = selectedWards.includes(w.wardNo);
-                        return (
-                          <Pressable
-                            key={w._id}
-                            onPress={() => toggleWard(w.wardNo)}
-                            className={[
-                              "px-3 py-1.5 rounded-full border",
-                              active
-                                ? "bg-brand border-brand"
-                                : "bg-surface-light dark:bg-surface-dark border-line-default",
-                            ].join(" ")}
-                          >
-                            <Text
-                              className={[
-                                "text-[12px] font-medium",
-                                active ? "text-white" : "text-ink-primary-light dark:text-ink-primary-dark",
-                              ].join(" ")}
-                            >
-                              Ward {w.wardNo} · {w.name}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  )}
-                  <Text className="text-caption text-ink-tertiary-light mt-2">
-                    {selectedWards.length} ward{selectedWards.length === 1 ? "" : "s"} selected
+      <AdminHeader
+        variant="surface"
+        eyebrow=""
+        title="Masters"
+        subtitle={`${masters.ulbs.length} municipalities · ${masters.wards.length} wards · ${lookupCount} lookup values`}
+        footer={
+          <View className="flex-row mt-3 p-1 bg-page-light dark:bg-page-dark rounded-xl border border-line-subtle">
+            {(
+              [
+                { id: "tenants" as const, label: "Tenants" },
+                { id: "lookups" as const, label: "Lookups" },
+              ] as const
+            ).map((t) => {
+              const active = tab === t.id;
+              return (
+                <Pressable
+                  key={t.id}
+                  onPress={() => setTab(t.id)}
+                  className={[
+                    "flex-1 py-2 rounded-lg items-center",
+                    active ? "bg-brand" : "",
+                  ].join(" ")}
+                >
+                  <Text
+                    className={[
+                      "text-[12px] font-semibold",
+                      active ? "text-white" : "text-ink-secondary-light",
+                    ].join(" ")}
+                  >
+                    {t.label}
                   </Text>
-                </AppCard>
-              </>
-            ) : null}
-          </>
+                </Pressable>
+              );
+            })}
+          </View>
+        }
+      />
+
+      <ScrollView contentContainerStyle={{ padding: 14, paddingBottom: 28 }}>
+        {tab === "tenants" ? (
+          masters.ulbs.length === 0 ? (
+            <EmptyState
+              icon="business-outline"
+              title="No municipalities"
+              message="Seed districts and ULBs to enable approvals and surveys."
+            />
+          ) : (
+            <>
+              <SectionLabel>Municipalities & wards</SectionLabel>
+              {masters.ulbs.map((muni) => {
+                const wards = wardsByMuni.get(muni.code) ?? [];
+                const open = expandedMuni === muni.code;
+                return (
+                  <AppCard key={muni._id} padded={false} className="mb-2.5 overflow-hidden">
+                    <Pressable
+                      onPress={() => setExpandedMuni(open ? null : muni.code)}
+                      className="flex-row items-center px-3.5 py-3 active:bg-page-light dark:active:bg-page-dark"
+                    >
+                      <View className="w-9 h-9 rounded-full bg-brand-soft items-center justify-center">
+                        <Ionicons name="business-outline" size={18} color="#003B8E" />
+                      </View>
+                      <View className="flex-1 ml-3">
+                        <Text className="text-[13px] font-medium text-ink-primary-light dark:text-ink-primary-dark">
+                          {muni.name}
+                        </Text>
+                        <Text className="text-caption text-ink-tertiary-light mt-0.5">
+                          {muni.districtName} · {muni.bodyType.replace(/_/g, " ")}
+                        </Text>
+                      </View>
+                      <Tag label={`${wards.length} wards`} tone="neutral" />
+                      <Ionicons
+                        name={open ? "chevron-up" : "chevron-down"}
+                        size={18}
+                        color="#9AA3AF"
+                        style={{ marginLeft: 8 }}
+                      />
+                    </Pressable>
+                    {open ? (
+                      <View className="px-3.5 pb-3 border-t border-line-subtle">
+                        {wards.length === 0 ? (
+                          <Text className="text-caption text-ink-tertiary-light py-2">
+                            No wards configured. Add wards before assigning surveyors.
+                          </Text>
+                        ) : (
+                          <View className="flex-row flex-wrap gap-1.5 pt-2">
+                            {wards.map((w) => (
+                              <View
+                                key={w._id}
+                                className="px-2.5 py-1 rounded-full bg-page-light dark:bg-page-dark border border-line-subtle"
+                              >
+                                <Text className="text-[11px] text-ink-secondary-light">
+                                  {w.wardNo} · {w.name}
+                                </Text>
+                              </View>
+                            ))}
+                          </View>
+                        )}
+                      </View>
+                    ) : null}
+                  </AppCard>
+                );
+              })}
+            </>
+          )
         ) : (
-          <Banner
-            tone="warning"
-            title="Granting admin access"
-            message="Admins can manage every user, municipality, and master data. Only grant this role when intended."
-            icon="warning-outline"
-          />
+          <>
+            <SectionLabel>Survey dropdown options</SectionLabel>
+            <Text className="text-caption text-ink-tertiary-light -mt-1 mb-3">
+              Values shown in field forms. Managed via admin API in production.
+            </Text>
+            {LOOKUP_GROUPS.map((group) => {
+              const options = masters[group.key] ?? [];
+              const open = expandedCategory === group.key;
+              return (
+                <AppCard key={group.key} padded={false} className="mb-2.5 overflow-hidden">
+                  <Pressable
+                    onPress={() => setExpandedCategory(open ? null : group.key)}
+                    className="flex-row items-center px-3.5 py-3 active:bg-page-light dark:active:bg-page-dark"
+                  >
+                    <View className="w-9 h-9 rounded-full bg-page-light dark:bg-page-dark items-center justify-center">
+                      <Ionicons name={group.icon} size={18} color="#6B7280" />
+                    </View>
+                    <Text className="flex-1 ml-3 text-[13px] font-medium text-ink-primary-light dark:text-ink-primary-dark">
+                      {group.label}
+                    </Text>
+                    <Tag label={String(options.length)} tone={options.length ? "brand" : "neutral"} />
+                    <Ionicons
+                      name={open ? "chevron-up" : "chevron-down"}
+                      size={18}
+                      color="#9AA3AF"
+                      style={{ marginLeft: 8 }}
+                    />
+                  </Pressable>
+                  {open ? (
+                    <View className="px-3.5 pb-3 border-t border-line-subtle flex-row flex-wrap gap-1.5 pt-2">
+                      {options.length === 0 ? (
+                        <Text className="text-caption text-ink-tertiary-light">Not seeded</Text>
+                      ) : (
+                        options.map((o) => (
+                          <View
+                            key={o.value}
+                            className="px-2.5 py-1 rounded-full bg-brand-soft border border-brand/10"
+                          >
+                            <Text className="text-[11px] font-medium text-brand">{o.label}</Text>
+                          </View>
+                        ))
+                      )}
+                    </View>
+                  ) : null}
+                </AppCard>
+              );
+            })}
+          </>
         )}
-
-        <AppButton
-          label={submitting ? "Approving…" : "Approve and grant access"}
-          loading={submitting}
-          onPress={handleApprove}
-          disabled={!canSubmit}
-          fullWidth
-          className="mt-3"
-        />
       </ScrollView>
-
-      {toast ? (
-        <Toast visible title={toast.title} tone={toast.tone} onHide={() => setToast(null)} />
-      ) : null}
     </View>
   );
 }

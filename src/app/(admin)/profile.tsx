@@ -1,15 +1,23 @@
-import { Alert, ScrollView, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useAuth } from "@clerk/expo";
-import { useQuery } from "convex/react";
 import { AppButton, AppCard, Avatar, ListRow, SectionLabel, Spinner, Tag } from "@/components";
+import { AdminHeader } from "@/components/admin/admin-header";
 import { api } from "@/convex/_generated/api";
 import { humanizeRole } from "@/utils/format";
+import { useAuth } from "@clerk/expo";
+import { useQuery } from "convex/react";
+import { useRouter } from "expo-router";
+import { Alert, ScrollView, Text, View } from "react-native";
 
 export default function AdminProfileScreen() {
+  const router = useRouter();
   const me = useQuery(api.users.currentUser, {});
+  const pending = useQuery(api.admin.listPendingApprovals, {});
+  const users = useQuery(api.admin.listUsers, {});
   const { signOut } = useAuth();
-  if (!me) return <Spinner label="Loading…" />;
+
+  if (!me) return <Spinner label="Loading profile…" />;
+
+  const pendingCount = pending?.length ?? 0;
+  const activeUsers = users?.filter((u) => u.status === "active").length ?? 0;
 
   const onSignOut = () => {
     Alert.alert("Sign out?", "You'll need to sign in again to continue.", [
@@ -20,26 +28,77 @@ export default function AdminProfileScreen() {
 
   return (
     <View className="flex-1 bg-page-light dark:bg-page-dark">
-      <SafeAreaView edges={["top"]} className="bg-brand">
-        <View className="items-center pt-3 pb-6">
-          <Avatar name={me.name} tone="brand" size="xl" />
-          <Text className="text-h2 font-medium text-white mt-2.5">{me.name}</Text>
-          <Text className="text-caption text-white/75 mt-0.5">{me.email}</Text>
-          <View className="mt-2 flex-row gap-1.5">
+      <AdminHeader
+        title={me.name}
+        subtitle={me.email}
+        eyebrow="Your account"
+        footer={
+          <View className="mt-3 flex-row justify-center">
             <Tag label={humanizeRole(me.role)} tone="brand" icon="shield-checkmark-outline" />
           </View>
-        </View>
-      </SafeAreaView>
+        }
+      />
+
       <ScrollView contentContainerStyle={{ padding: 14, paddingBottom: 28 }}>
-        <SectionLabel>Admin tools</SectionLabel>
+        <View className="items-center -mt-10 mb-4">
+          <View className="rounded-full border-4 border-page-light dark:border-page-dark">
+            <Avatar name={me.name} tone="brand" size="xl" />
+          </View>
+        </View>
+
+        <View className="flex-row gap-2 mb-4">
+          <View className="flex-1 p-3 bg-surface-light dark:bg-surface-dark rounded-xl border border-line-subtle items-center">
+            <Text className="text-h2 font-semibold text-brand">{pendingCount}</Text>
+            <Text className="text-caption text-ink-tertiary-light mt-0.5">Pending</Text>
+          </View>
+          <View className="flex-1 p-3 bg-surface-light dark:bg-surface-dark rounded-xl border border-line-subtle items-center">
+            <Text className="text-h2 font-semibold text-ink-primary-light dark:text-ink-primary-dark">
+              {activeUsers}
+            </Text>
+            <Text className="text-caption text-ink-tertiary-light mt-0.5">Active users</Text>
+          </View>
+        </View>
+
+        <SectionLabel>Navigate</SectionLabel>
         <AppCard padded={false} className="mb-4">
-          <ListRow icon="bulb-outline" iconTone="brand" title="Approvals" subtitle="Pending sign-ups" />
+          <ListRow
+            icon="checkmark-circle-outline"
+            iconTone="brand"
+            title="Approvals"
+            subtitle={
+              pendingCount > 0
+                ? `${pendingCount} request${pendingCount === 1 ? "" : "s"} waiting`
+                : "Inbox clear"
+            }
+            rightText={pendingCount > 0 ? String(pendingCount) : undefined}
+            onPress={() => router.push("/(admin)/approvals")}
+          />
           <View className="h-px bg-line-subtle" />
-          <ListRow icon="people-outline" iconTone="neutral" title="Users" />
+          <ListRow
+            icon="people-outline"
+            iconTone="neutral"
+            title="Users"
+            subtitle="Browse and filter accounts"
+            onPress={() => router.push("/(admin)/users")}
+          />
           <View className="h-px bg-line-subtle" />
-          <ListRow icon="library-outline" iconTone="neutral" title="Masters" />
+          <ListRow
+            icon="library-outline"
+            iconTone="neutral"
+            title="Masters"
+            subtitle="Municipalities, wards, and lookups"
+            onPress={() => router.push("/(admin)/masters")}
+          />
         </AppCard>
-        <AppButton label="Sign out" variant="outline" iconLeft="log-out-outline" onPress={onSignOut} fullWidth />
+
+        <SectionLabel>Account</SectionLabel>
+        <AppButton
+          label="Sign out"
+          variant="outline"
+          iconLeft="log-out-outline"
+          onPress={onSignOut}
+          fullWidth
+        />
       </ScrollView>
     </View>
   );

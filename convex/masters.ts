@@ -183,8 +183,8 @@ export const dashboardCounts = query({
       today: rows.filter((r) => r._creationTime >= todayMs).length,
       drafts: rows.filter((r) => r.status === "draft").length,
       submitted: rows.filter((r) => r.status === "submitted").length,
-      approved: rows.filter((r) => r.status === "approved").length,
-      rejected: rows.filter((r) => r.status === "rejected").length,
+      approved: rows.filter((r) => r.qcStatus === "approved").length,
+      rejected: rows.filter((r) => r.qcStatus === "rejected").length,
     };
   },
 });

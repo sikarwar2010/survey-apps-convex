@@ -1,84 +1,166 @@
-import { useState } from "react";
-import { FlatList, Pressable, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useQuery } from "convex/react";
+import { AdminHeader } from "@/components/admin/admin-header";
+import { FilterChipItem, FilterChips } from "@/components/admin/filter-chips";
 import { Avatar, EmptyState, Spinner, Tag } from "@/components";
 import { api } from "@/convex/_generated/api";
 import { humanizeRole, timeAgo } from "@/utils/format";
+import { useQuery } from "convex/react";
+import { useMemo, useState } from "react";
+import { FlatList, RefreshControl, Text, TextInput, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
-const ROLES = [
+const ROLE_FILTERS = [
   { value: undefined, label: "All" },
   { value: "surveyor", label: "Surveyors" },
   { value: "supervisor", label: "Supervisors" },
   { value: "admin", label: "Admins" },
   { value: "pending", label: "Pending" },
-] as const;
+] as const satisfies readonly FilterChipItem<string | undefined>[];
 
 export default function AdminUsersScreen() {
   const [role, setRole] = useState<string | undefined>(undefined);
+  const [search, setSearch] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
   const users = useQuery(api.admin.listUsers, { role: role as never });
+
+  const filtered = useMemo(() => {
+    if (!users) return undefined;
+    const q = search.trim().toLowerCase();
+    if (!q) return users;
+    return users.filter(
+      (u) =>
+        u.name.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q) ||
+        (u.municipalityName?.toLowerCase().includes(q) ?? false),
+    );
+  }, [users, search]);
+
+  const roleCounts = useMemo(() => {
+    if (!users) return {} as Record<string, number>;
+    return {
+      surveyor: users.filter((u) => u.role === "surveyor").length,
+      supervisor: users.filter((u) => u.role === "supervisor").length,
+      admin: users.filter((u) => u.role === "admin").length,
+      pending: users.filter((u) => u.role === "pending").length,
+    };
+  }, [users]);
+
+  const chips: FilterChipItem<string | undefined>[] = ROLE_FILTERS.map((r) => ({
+    ...r,
+    count:
+      r.value === undefined
+        ? users?.length
+        : r.value
+          ? roleCounts[r.value]
+          : undefined,
+  }));
 
   return (
     <View className="flex-1 bg-page-light dark:bg-page-dark">
-      <SafeAreaView edges={["top"]} className="bg-surface-light dark:bg-surface-dark border-b border-line-subtle">
-        <View className="px-4 pt-2 pb-3">
-          <Text className="text-h1 font-medium text-ink-primary-light dark:text-ink-primary-dark">Users</Text>
-        </View>
-        <View className="px-4 pb-3 flex-row gap-1.5 flex-wrap">
-          {ROLES.map((r) => {
-            const active = role === r.value;
-            return (
-              <Pressable
-                key={r.label}
-                onPress={() => setRole(r.value)}
-                className={`px-3 py-1.5 rounded-full border ${active ? "bg-brand border-brand" : "border-line-default"}`}
-              >
-                <Text className={`text-[12px] font-medium ${active ? "text-white" : "text-ink-secondary-light dark:text-ink-secondary-dark"}`}>
-                  {r.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </SafeAreaView>
+      <AdminHeader
+        variant="surface"
+        eyebrow=""
+        title="Users"
+        subtitle={
+          users === undefined
+            ? "Loading directory…"
+            : `${users.length} account${users.length === 1 ? "" : "s"} on platform`
+        }
+        footer={
+          <View className="mt-3 flex-row items-center bg-page-light dark:bg-page-dark rounded-xl border border-line-default px-3 h-11">
+            <Ionicons name="search-outline" size={18} color="#9AA3AF" />
+            <TextInput
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Search name or email"
+              placeholderTextColor="#9AA3AF"
+              className="flex-1 ml-2 text-[13px] text-ink-primary-light dark:text-ink-primary-dark"
+              autoCapitalize="none"
+              autoCorrect={false}
+              clearButtonMode="while-editing"
+            />
+          </View>
+        }
+      />
 
-      {users === undefined ? (
-        <Spinner label="Loading…" />
-      ) : users.length === 0 ? (
-        <EmptyState icon="people-outline" title="No users" />
+      <FilterChips items={chips} value={role} onChange={setRole} />
+
+      {filtered === undefined ? (
+        <Spinner label="Loading users…" />
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          icon="people-outline"
+          title={search ? "No matches" : "No users"}
+          message={
+            search
+              ? "Try a different name or email."
+              : role
+                ? "No users in this category yet."
+                : "Approved users will appear here."
+          }
+        />
       ) : (
         <FlatList
-          data={users}
+          data={filtered}
           keyExtractor={(u) => u._id}
-          contentContainerStyle={{ padding: 14, paddingBottom: 24 }}
-          ItemSeparatorComponent={() => <View className="h-2" />}
+          contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 24 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                setTimeout(() => setRefreshing(false), 400);
+              }}
+              tintColor="#003B8E"
+            />
+          }
+          ItemSeparatorComponent={() => <View className="h-2.5" />}
           renderItem={({ item }) => (
             <View className="p-3.5 bg-surface-light dark:bg-surface-dark rounded-xl border border-line-subtle">
               <View className="flex-row items-center">
                 <Avatar
                   name={item.name}
-                  tone={item.status === "active" ? "brand" : item.status === "disabled" ? "danger" : "warning"}
+                  tone={
+                    item.status === "active"
+                      ? "brand"
+                      : item.status === "disabled"
+                        ? "danger"
+                        : "warning"
+                  }
                   size="md"
                 />
-                <View className="flex-1 ml-3">
-                  <Text className="text-[13px] font-medium text-ink-primary-light dark:text-ink-primary-dark">
+                <View className="flex-1 ml-3 min-w-0">
+                  <Text
+                    className="text-[13px] font-medium text-ink-primary-light dark:text-ink-primary-dark"
+                    numberOfLines={1}
+                  >
                     {item.name}
                   </Text>
-                  <Text className="text-caption text-ink-tertiary-light">{item.email}</Text>
+                  <Text className="text-caption text-ink-tertiary-light" numberOfLines={1}>
+                    {item.email}
+                  </Text>
                 </View>
-                <Tag label={humanizeRole(item.role)} tone={item.role === "admin" ? "brand" : "neutral"} />
+                <Tag
+                  label={humanizeRole(item.role)}
+                  tone={item.role === "admin" ? "brand" : "neutral"}
+                />
               </View>
-              <View className="flex-row gap-1.5 mt-2 flex-wrap">
-                {item.municipalityName ? <Tag label={item.municipalityName} tone="neutral" icon="business-outline" /> : null}
+              <View className="flex-row gap-1.5 mt-2.5 flex-wrap">
+                {item.municipalityName ? (
+                  <Tag label={item.municipalityName} tone="neutral" icon="business-outline" />
+                ) : null}
                 {item.wardAssignments.length > 0 ? (
-                  <Tag label={`Wards: ${item.wardAssignments.join(", ")}`} tone="neutral" icon="map-outline" />
+                  <Tag
+                    label={`Wards ${item.wardAssignments.join(", ")}`}
+                    tone="neutral"
+                    icon="map-outline"
+                  />
                 ) : null}
                 {item.status === "active" ? (
                   <Tag label="Active" tone="success" icon="checkmark-circle" />
                 ) : item.status === "disabled" ? (
                   <Tag label="Disabled" tone="danger" icon="ban" />
                 ) : (
-                  <Tag label="Pending" tone="warning" icon="time" />
+                  <Tag label="Awaiting approval" tone="warning" icon="time" />
                 )}
                 {item.lastSeenAt ? (
                   <Tag label={`Seen ${timeAgo(item.lastSeenAt)}`} tone="neutral" icon="eye-outline" />
