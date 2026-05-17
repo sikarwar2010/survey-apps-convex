@@ -4,17 +4,17 @@
  * Surveyor: read-only after submit; can edit fields and add photos while draft.
  * Supervisor/admin: can leave QC remarks and approve/reject.
  */
-import { Alert, ScrollView, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useMutation, useQuery } from 'convex/react';
-import { Ionicons } from '@expo/vector-icons';
 import { AppButton, AppCard, Banner, ListRow, SectionLabel, Spinner, StatusBadge, Tag, Toast } from '@/components';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
-import { useState } from 'react';
-import { humanizeRole, formatArea, timeAgo } from '@/utils/format';
 import { toUserMessage } from '@/utils/errors';
+import { formatArea, humanizeRole, timeAgo } from '@/utils/format';
+import { Ionicons } from '@expo/vector-icons';
+import { useMutation, useQuery } from 'convex/react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useState } from 'react';
+import { Alert, ScrollView, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function SurveyDetailScreen() {
   const router = useRouter();
@@ -39,6 +39,7 @@ export default function SurveyDetailScreen() {
 
   const canEdit = me?.role === 'surveyor' ? survey.surveyorId === me._id && survey.qcStatus !== 'approved' : true;
   const canSubmit = canEdit && survey.status === 'draft';
+  const canContinueWizard = canEdit && (survey.status === 'draft' || survey.qcStatus === 'rejected');
   const canReview =
     (me?.role === 'supervisor' || me?.role === 'admin') &&
     survey.status === 'submitted' &&
@@ -242,6 +243,23 @@ export default function SurveyDetailScreen() {
             fullWidth
           />
         </AppCard>
+
+        {canContinueWizard ? (
+          <AppButton
+            label="Continue in wizard"
+            variant="outline"
+            iconLeft="create-outline"
+            size="lg"
+            fullWidth
+            className="mb-2"
+            onPress={() =>
+              router.push({
+                pathname: '/(app)/wizard',
+                params: { surveyId: id },
+              })
+            }
+          />
+        ) : null}
 
         {canSubmit ? (
           <AppButton

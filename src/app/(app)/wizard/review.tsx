@@ -14,19 +14,18 @@
  * Failures at any step leave the local draft intact so the surveyor can
  * fix and retry without losing data.
  */
-import { useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useMutation, useQuery } from 'convex/react';
-import { Ionicons } from '@expo/vector-icons';
 import { AppButton, AppCard, Banner, ListRow, SectionLabel, Spinner, StepIndicator, Tag, Toast } from '@/components';
 import { api } from '@/convex/_generated/api';
-import type { Id } from '@/convex/_generated/dataModel';
 import { clearDraft, draftToUpsertArgs, stepCompletion, useWizardDraft } from '@/hooks/useWizardDraft';
 import { indicatorSteps, WIZARD_STEPS } from '@/hooks/wizardSteps';
 import { toUserMessage } from '@/utils/errors';
 import { formatArea, humanizeRole } from '@/utils/format';
+import { Ionicons } from '@expo/vector-icons';
+import { useMutation, useQuery } from 'convex/react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useState } from 'react';
+import { ScrollView, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ReviewScreen() {
   const router = useRouter();
@@ -35,6 +34,7 @@ export default function ReviewScreen() {
   const masters = useQuery(api.masters.bundle, {});
 
   const upsert = useMutation(api.surveys.upsert);
+  const upsertFloor = useMutation(api.floors.upsert);
   const linkPhoto = useMutation(api.photos.linkPhoto);
   const submit = useMutation(api.surveys.submit);
 
@@ -54,7 +54,19 @@ export default function ReviewScreen() {
     setBusy(true);
     try {
       const surveyId = await upsert(args);
-      // Link photos
+      for (let i = 0; i < (draft.floors ?? []).length; i++) {
+        const f = draft.floors![i];
+        await upsertFloor({
+          surveyId,
+          clientFloorId: f.clientFloorId,
+          position: i,
+          floorName: f.floorName,
+          usageType: f.usageType,
+          constructionType: f.constructionType,
+          isOccupied: f.isOccupied,
+          areaSqft: f.areaSqft,
+        });
+      }
       for (const photo of draft.photos ?? []) {
         await linkPhoto({
           surveyId,

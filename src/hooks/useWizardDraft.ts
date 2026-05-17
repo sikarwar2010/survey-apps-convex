@@ -19,9 +19,9 @@
  *   - useWizardDraft(id) → loads the draft for `localId`, exposes update + reset
  *   - clearDraft(id)     → drops the entry from AsyncStorage after successful submit
  */
-import { useCallback, useEffect, useState } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import type { Id } from "../../convex/_generated/dataModel";
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useCallback, useEffect, useState } from 'react';
+import type { Id } from '../../convex/_generated/dataModel';
 
 const KEY = (localId: string) => `wizard_draft:${localId}`;
 
@@ -31,7 +31,7 @@ export interface WizardDraft {
   updatedAt: number;
 
   // Step 1 — Property
-  municipalityId?: Id<"municipalities">;
+  municipalityId?: Id<'municipalities'>;
   wardNo?: string;
   propertyNo?: string;
   isSlum?: boolean;
@@ -93,8 +93,8 @@ export interface WizardDraft {
   // screen can show thumbnails and the submit call can link them to
   // the new survey.
   photos?: Array<{
-    slot: "front" | "inside" | "side" | "document";
-    storageId: Id<"_storage">;
+    slot: 'front' | 'inside' | 'side' | 'document';
+    storageId: Id<'_storage'>;
     url?: string;
     sizeKb: number;
     width?: number;
@@ -125,9 +125,116 @@ export async function clearDraft(localId: string): Promise<void> {
   await AsyncStorage.removeItem(KEY(localId));
 }
 
+export async function persistDraft(draft: WizardDraft): Promise<void> {
+  const next = { ...draft, updatedAt: Date.now() };
+  await AsyncStorage.setItem(KEY(next.localId), JSON.stringify(next));
+}
+
+/** Hydrate a server survey into a local wizard draft (resume / edit). */
+export function surveyToDraft(survey: {
+  localId: string;
+  municipalityId: Id<'municipalities'>;
+  wardNo: string;
+  propertyNo: string;
+  isSlum: boolean;
+  ownerName: string;
+  respondentName: string;
+  relationship: string;
+  mobileNo: string;
+  familySize: number;
+  houseNo: string;
+  street: string;
+  locality?: string;
+  city: string;
+  pinCode: string;
+  assessmentYear: string;
+  ownershipType: string;
+  propertyType: string;
+  propertyUse: string;
+  situation: string;
+  roadType: string;
+  taxRateZone: string;
+  plotSqft: number;
+  plinthSqft: number;
+  waterSource: string;
+  sanitationType: string;
+  solidWasteType: string;
+  electricityNo?: string;
+  gps?: WizardDraft['gps'];
+  floors: Array<{
+    clientFloorId: string;
+    floorName: string;
+    usageType: string;
+    constructionType: string;
+    isOccupied: boolean;
+    areaSqft: number;
+  }>;
+  photos: Array<{
+    slot: 'front' | 'inside' | 'side' | 'document';
+    storageId: Id<'_storage'>;
+    url?: string | null;
+    sizeKb: number;
+    width?: number;
+    height?: number;
+    capturedAt: number;
+  }>;
+}): WizardDraft {
+  const now = Date.now();
+  return {
+    localId: survey.localId,
+    createdAt: now,
+    updatedAt: now,
+    municipalityId: survey.municipalityId,
+    wardNo: survey.wardNo,
+    propertyNo: survey.propertyNo,
+    isSlum: survey.isSlum,
+    ownerName: survey.ownerName,
+    respondentName: survey.respondentName,
+    relationship: survey.relationship,
+    mobileNo: survey.mobileNo,
+    familySize: survey.familySize,
+    houseNo: survey.houseNo,
+    street: survey.street,
+    locality: survey.locality,
+    city: survey.city,
+    pinCode: survey.pinCode,
+    assessmentYear: survey.assessmentYear,
+    ownershipType: survey.ownershipType,
+    propertyType: survey.propertyType,
+    propertyUse: survey.propertyUse,
+    situation: survey.situation,
+    roadType: survey.roadType,
+    taxRateZone: survey.taxRateZone,
+    plotSqft: survey.plotSqft,
+    plinthSqft: survey.plinthSqft,
+    waterSource: survey.waterSource,
+    sanitationType: survey.sanitationType,
+    solidWasteType: survey.solidWasteType,
+    electricityNo: survey.electricityNo,
+    floors: survey.floors.map((f) => ({
+      clientFloorId: f.clientFloorId,
+      floorName: f.floorName,
+      usageType: f.usageType,
+      constructionType: f.constructionType,
+      isOccupied: f.isOccupied,
+      areaSqft: f.areaSqft,
+    })),
+    gps: survey.gps,
+    photos: survey.photos.map((p) => ({
+      slot: p.slot,
+      storageId: p.storageId,
+      url: p.url ?? undefined,
+      sizeKb: p.sizeKb,
+      width: p.width,
+      height: p.height,
+      capturedAt: p.capturedAt,
+    })),
+  };
+}
+
 export async function listDrafts(): Promise<WizardDraft[]> {
   const keys = await AsyncStorage.getAllKeys();
-  const wizardKeys = keys.filter((k) => k.startsWith("wizard_draft:"));
+  const wizardKeys = keys.filter((k) => k.startsWith('wizard_draft:'));
   const pairs = await AsyncStorage.multiGet(wizardKeys);
   return pairs
     .map(([, v]) => (v ? (JSON.parse(v) as WizardDraft) : null))
@@ -151,9 +258,23 @@ export function useWizardDraft(localId: string | undefined) {
       return;
     }
     AsyncStorage.getItem(KEY(localId))
-      .then((raw) => {
+      .then(async (raw) => {
         if (!alive) return;
-        setDraft(raw ? (JSON.parse(raw) as WizardDraft) : null);
+        if (raw) {
+          setDraft(JSON.parse(raw) as WizardDraft);
+          return;
+        }
+        const empty: WizardDraft = {
+          localId,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          isSlum: false,
+          familySize: 1,
+          floors: [],
+          photos: [],
+        };
+        await AsyncStorage.setItem(KEY(localId), JSON.stringify(empty));
+        setDraft(empty);
       })
       .finally(() => alive && setLoading(false));
     return () => {
@@ -161,28 +282,45 @@ export function useWizardDraft(localId: string | undefined) {
     };
   }, [localId]);
 
-  const update = useCallback(
-    async (patch: Partial<WizardDraft>) => {
-      if (!draft) return;
-      const next = { ...draft, ...patch, updatedAt: Date.now() };
-      setDraft(next);
-      await AsyncStorage.setItem(KEY(next.localId), JSON.stringify(next));
-    },
-    [draft],
-  );
+  const update = useCallback(async (patch: Partial<WizardDraft>) => {
+    setDraft((current) => {
+      if (!current) return current;
+      const next = { ...current, ...patch, updatedAt: Date.now() };
+      void AsyncStorage.setItem(KEY(next.localId), JSON.stringify(next));
+      return next;
+    });
+  }, []);
 
   return { draft, loading, update };
 }
 
 /** Map an AsyncStorage draft → `surveys.upsert` payload (filled-required-fields check). */
 export function draftToUpsertArgs(d: WizardDraft) {
-  if (!d.municipalityId || !d.wardNo || !d.propertyNo || !d.ownerName ||
-      !d.respondentName || !d.relationship || !d.mobileNo ||
-      !d.houseNo || !d.street || !d.city || !d.pinCode ||
-      !d.assessmentYear || !d.ownershipType || !d.propertyType ||
-      !d.propertyUse || !d.situation || !d.roadType || !d.taxRateZone ||
-      d.plotSqft == null || d.plinthSqft == null ||
-      !d.waterSource || !d.sanitationType || !d.solidWasteType) {
+  if (
+    !d.municipalityId ||
+    !d.wardNo ||
+    !d.propertyNo ||
+    !d.ownerName ||
+    !d.respondentName ||
+    !d.relationship ||
+    !d.mobileNo ||
+    !d.houseNo ||
+    !d.street ||
+    !d.city ||
+    !d.pinCode ||
+    !d.assessmentYear ||
+    !d.ownershipType ||
+    !d.propertyType ||
+    !d.propertyUse ||
+    !d.situation ||
+    !d.roadType ||
+    !d.taxRateZone ||
+    d.plotSqft == null ||
+    d.plinthSqft == null ||
+    !d.waterSource ||
+    !d.sanitationType ||
+    !d.solidWasteType
+  ) {
     return null;
   }
   return {
@@ -228,14 +366,25 @@ export function stepCompletion(d: WizardDraft) {
     property: !!(d.municipalityId && d.wardNo && d.propertyNo),
     owner: !!(d.ownerName && d.respondentName && d.relationship && d.mobileNo),
     address: !!(d.houseNo && d.street && d.city && d.pinCode),
-    taxation: !!(d.assessmentYear && d.ownershipType && d.propertyType &&
-      d.propertyUse && d.situation && d.roadType && d.taxRateZone &&
-      d.plotSqft != null && d.plinthSqft != null),
+    taxation: !!(
+      d.assessmentYear &&
+      d.ownershipType &&
+      d.propertyType &&
+      d.propertyUse &&
+      d.situation &&
+      d.roadType &&
+      d.taxRateZone &&
+      d.plotSqft != null &&
+      d.plinthSqft != null
+    ),
     floors: !!(d.floors && d.floors.length > 0),
     services: !!(d.waterSource && d.sanitationType && d.solidWasteType),
     gps: !!d.gps,
-    photos: !!(d.photos && d.photos.length >= 2 &&
-      d.photos.some((p) => p.slot === "front") &&
-      d.photos.some((p) => p.slot === "inside")),
+    photos: !!(
+      d.photos &&
+      d.photos.length >= 2 &&
+      d.photos.some((p) => p.slot === 'front') &&
+      d.photos.some((p) => p.slot === 'inside')
+    ),
   };
 }

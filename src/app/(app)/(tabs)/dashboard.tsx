@@ -4,22 +4,13 @@
  * Every widget is a `useQuery` — Convex pushes updates live, so the KPI
  * tiles and recent list refresh themselves as new surveys land.
  */
-import {
-  AppButton,
-  Banner,
-  EmptyState,
-  KpiCard,
-  PulseDot,
-  SectionLabel,
-  Spinner,
-  SurveyCard,
-} from "@/components";
-import { api } from "@/convex/_generated/api";
-import { humanizeRole } from "@/utils/format";
-import { useQuery } from "convex/react";
-import { useRouter } from "expo-router";
-import { ScrollView, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { AppButton, Banner, EmptyState, KpiCard, PulseDot, SectionLabel, Spinner, SurveyCard } from '@/components';
+import { api } from '@/convex/_generated/api';
+import { humanizeRole } from '@/utils/format';
+import { useQuery } from 'convex/react';
+import { useRouter } from 'expo-router';
+import { ScrollView, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function DashboardScreen() {
   const router = useRouter();
@@ -34,13 +25,13 @@ export default function DashboardScreen() {
 
   return (
     <View className="flex-1 bg-page-light dark:bg-page-dark">
-      <SafeAreaView edges={["top"]} className="bg-brand">
+      <SafeAreaView edges={['top']} className="bg-brand">
         <View className="px-4 pt-2 pb-5">
           <View className="flex-row items-center justify-between">
             <View>
               <Text className="text-helper text-white/65">{humanizeRole(me.role)}</Text>
               <Text className="text-h2 font-medium text-white mt-0.5" numberOfLines={1}>
-                Hello, {me.name.split(" ")[0]}
+                Hello, {me.name.split(' ')[0]}
               </Text>
             </View>
             <View className="flex-row items-center bg-white/15 px-2.5 py-1 rounded-full gap-1.5">
@@ -50,8 +41,8 @@ export default function DashboardScreen() {
           </View>
           {me.municipality ? (
             <Text className="text-caption text-white/75 mt-2">
-              {me.municipality.code} · Ward{me.wardAssignments.length === 1 ? " " : "s "}
-              {me.wardAssignments.join(", ") || "—"}
+              {me.municipality.code} · Ward{me.wardAssignments.length === 1 ? ' ' : 's '}
+              {me.wardAssignments.join(', ') || '—'}
             </Text>
           ) : null}
         </View>
@@ -71,7 +62,7 @@ export default function DashboardScreen() {
           <Banner
             tone="danger"
             icon="alert-circle-outline"
-            title={`${counts.rejected} survey${counts.rejected === 1 ? "" : "s"} need revision`}
+            title={`${counts.rejected} survey${counts.rejected === 1 ? '' : 's'} need revision`}
             message="Open the surveys list to review supervisor remarks."
             className="mb-4"
           />
@@ -81,16 +72,13 @@ export default function DashboardScreen() {
           label="Start new survey"
           iconLeft="add"
           size="lg"
-          onPress={() => router.push("/(app)/survey/wizard")}
+          onPress={() => router.push('/(app)/wizard')}
           fullWidth
         />
 
         <View className="flex-row items-center justify-between mt-5 mb-2">
           <SectionLabel>Recent</SectionLabel>
-          <Text
-            className="text-helper text-brand font-medium"
-            onPress={() => router.push("/(app)/surveys")}
-          >
+          <Text className="text-helper text-brand font-medium" onPress={() => router.push('/surveys')}>
             View all
           </Text>
         </View>
@@ -112,7 +100,7 @@ export default function DashboardScreen() {
                 status={s.status}
                 qcStatus={s.qcStatus}
                 updatedAt={s._creationTime}
-                onPress={() => router.push({ pathname: "/(app)/survey/[id]", params: { id: s._id } })}
+                onPress={() => router.push({ pathname: '/(app)/survey/[id]', params: { id: s._id } })}
               />
             ))}
           </View>

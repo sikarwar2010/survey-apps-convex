@@ -10,29 +10,29 @@
  *   - not signed in           → redirect to /(auth)/sign-in
  *   - signed in but not approved → /(auth)/awaiting-approval
  *   - signed in + approved + admin role → /(admin)
- *   - signed in + approved + surveyor/supervisor → /(app)/dashboard
+ *   - signed in + approved + surveyor/supervisor → /dashboard
  */
-import "react-native-gesture-handler";
+import 'react-native-gesture-handler';
 
-import { AppErrorBoundary } from "@/components/app-error-boundary";
-import { ConfigGate } from "@/components/config-gate";
-import { ConvexAuthError } from "@/components/convex-auth-error";
-import { env } from "@/config/env";
-import { useClerkConvexAuth } from "@/hooks/use-clerk-convex-auth";
-import { useSyncConvexUser } from "@/hooks/use-sync-convex-user";
-import { ThemeProvider } from "@/theme";
-import { tokenCache } from "@/utils/tokenCache";
-import { ClerkProvider, useAuth } from "@clerk/expo";
-import { ConvexReactClient } from "convex/react";
-import { ConvexProviderWithClerk } from "convex/react-clerk";
-import { Slot, useRouter, useSegments } from "expo-router";
-import * as SplashScreen from "expo-splash-screen";
-import { StatusBar } from "expo-status-bar";
-import { useEffect, useMemo } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { SafeAreaProvider } from "react-native-safe-area-context";
-import "../../global.css";
+import { AppErrorBoundary } from '@/components/app-error-boundary';
+import { ConfigGate } from '@/components/config-gate';
+import { ConvexAuthError } from '@/components/convex-auth-error';
+import { env } from '@/config/env';
+import { useClerkConvexAuth } from '@/hooks/use-clerk-convex-auth';
+import { useSyncConvexUser } from '@/hooks/use-sync-convex-user';
+import { ThemeProvider } from '@/theme';
+import { tokenCache } from '@/utils/tokenCache';
+import { ClerkProvider, useAuth } from '@clerk/expo';
+import { ConvexReactClient } from 'convex/react';
+import { ConvexProviderWithClerk } from 'convex/react-clerk';
+import { Slot, useRouter, useSegments } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
+import { useEffect, useMemo } from 'react';
+import { ActivityIndicator, Text, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import '../../global.css';
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -63,10 +63,10 @@ function signedInLoadingMessage(
   needsSync: boolean,
   syncing: boolean,
 ): string {
-  if (convexAuthLoading || !convexReady) return "Securing your session…";
-  if (me === undefined) return "Loading your profile…";
-  if (needsSync && syncing) return "Setting up your account…";
-  return "Please wait…";
+  if (convexAuthLoading || !convexReady) return 'Securing your session…';
+  if (me === undefined) return 'Loading your profile…';
+  if (needsSync && syncing) return 'Setting up your account…';
+  return 'Please wait…';
 }
 
 function AuthGate() {
@@ -80,12 +80,12 @@ function AuthGate() {
     if (!isLoaded) return;
     SplashScreen.hideAsync().catch(() => undefined);
 
-    const inAuthGroup = segments[0] === "(auth)";
-    const inAdminGroup = segments[0] === "(admin)";
-    const inAppGroup = segments[0] === "(app)";
+    const inAuthGroup = segments[0] === '(auth)';
+    const inAdminGroup = segments[0] === '(admin)';
+    const inAppGroup = segments[0] === '(app)';
 
     if (!isSignedIn) {
-      if (!inAuthGroup) router.replace("/(auth)/sign-in");
+      if (!inAuthGroup) router.replace('/(auth)/sign-in');
       return;
     }
 
@@ -94,40 +94,30 @@ function AuthGate() {
     if (me === undefined) return;
 
     if (me === null) {
-      if (segments[0] !== "(auth)" || segments[1] !== "setup") {
-        router.replace("/(auth)/setup");
+      if (segments[0] !== '(auth)' || segments[1] !== 'setup') {
+        router.replace('/(auth)/setup');
       }
       return;
     }
 
-    if (me.status !== "active") {
-      if (segments[0] !== "(auth)" || segments[1] !== "awaiting-approval") {
-        router.replace("/(auth)/awaiting-approval");
+    if (me.status !== 'active') {
+      if (segments[0] !== '(auth)' || segments[1] !== 'awaiting-approval') {
+        router.replace('/(auth)/awaiting-approval');
       }
       return;
     }
 
-    if (me.role === "admin") {
-      if (!inAdminGroup && !inAppGroup) router.replace("/(admin)/approvals");
+    if (me.role === 'admin') {
+      if (!inAdminGroup && !inAppGroup) router.replace('/(admin)/approvals');
       return;
     }
-    if (me.role === "surveyor" || me.role === "supervisor") {
-      if (!inAppGroup) router.replace("/(app)/dashboard");
+    if (me.role === 'surveyor' || me.role === 'supervisor') {
+      if (!inAppGroup) router.replace('/dashboard');
     }
-  }, [
-    isLoaded,
-    isSignedIn,
-    convexReady,
-    me,
-    needsSync,
-    syncing,
-    segments,
-    router,
-  ]);
+  }, [isLoaded, isSignedIn, convexReady, me, needsSync, syncing, segments, router]);
 
   const loadingMessage = useMemo(
-    () =>
-      signedInLoadingMessage(convexAuthLoading, convexReady, me, needsSync, syncing),
+    () => signedInLoadingMessage(convexAuthLoading, convexReady, me, needsSync, syncing),
     [convexAuthLoading, convexReady, me, needsSync, syncing],
   );
 
@@ -140,8 +130,7 @@ function AuthGate() {
   }
 
   const showSignedInLoading =
-    isSignedIn &&
-    (convexAuthLoading || !convexReady || me === undefined || (needsSync && syncing));
+    isSignedIn && (convexAuthLoading || !convexReady || me === undefined || (needsSync && syncing));
 
   return (
     <View className="flex-1">
@@ -157,13 +146,7 @@ function AuthGate() {
 
 /* ────────────────────────── Root ────────────────────────── */
 
-export function ErrorBoundary({
-  error,
-  retry,
-}: {
-  error: Error;
-  retry: () => void;
-}) {
+export function ErrorBoundary({ error, retry }: { error: Error; retry: () => void }) {
   return <AppErrorBoundary error={error} retry={retry} />;
 }
 
