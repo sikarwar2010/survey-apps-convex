@@ -20,6 +20,7 @@ import type * as masters from "../masters.js";
 import type * as ownerRules from "../ownerRules.js";
 import type * as photos from "../photos.js";
 import type * as qc from "../qc.js";
+import type * as serviceMasters from "../serviceMasters.js";
 import type * as surveys from "../surveys.js";
 import type * as taxationMasters from "../taxationMasters.js";
 import type * as tenancy from "../tenancy.js";
@@ -46,6 +47,7 @@ declare const fullApi: ApiFromModules<{
   ownerRules: typeof ownerRules;
   photos: typeof photos;
   qc: typeof qc;
+  serviceMasters: typeof serviceMasters;
   surveys: typeof surveys;
   taxationMasters: typeof taxationMasters;
   tenancy: typeof tenancy;

@@ -80,12 +80,16 @@ export function normalizeOwners(owners: OwnerEntry[] | undefined): OwnerEntry[] 
   return cleaned.length ? cleaned : undefined;
 }
 
-/** Field-level validation for owner section (merged into survey upsert). */
-export function validateOwnerSection(input: {
-  relationship?: string;
-  owners?: OwnerEntry[];
-}): Record<string, string[]> {
+/** Field-level validation for owner section (merged into survey upsert / submit). */
+export function validateOwnerSection(
+  input: {
+    relationship?: string;
+    owners?: OwnerEntry[];
+  },
+  options?: { requirePrimaryMobile?: boolean },
+): Record<string, string[]> {
   const details: Record<string, string[]> = {};
+  const requirePrimary = options?.requirePrimaryMobile ?? true;
   if (input.relationship && !isValidRespondentRelationship(input.relationship)) {
     details.relationship = ['Select a valid relationship to owner'];
   }
@@ -94,7 +98,7 @@ export function validateOwnerSection(input: {
     details.owners = [`At most ${MAX_SURVEY_OWNERS} owners allowed`];
   }
   const primary = primaryOwnerMobile(owners);
-  if (!primary) {
+  if (requirePrimary && !primary) {
     details.mobileNo = ['Enter a valid 10-digit mobile for the first owner (starts 6-9)'];
   }
   owners.forEach((o, i) => {

@@ -52,7 +52,9 @@ export function normalizeAddressFields<T extends AddressFields>(
   };
 }
 
-/** Field-level validation for address section (merged into survey upsert). */
+export type AddressValidationMode = 'draft' | 'submit';
+
+/** Field-level validation for address section (draft = format-only; submit = full rules). */
 export function validateAddressSection(
   input: {
     houseNo?: string;
@@ -62,25 +64,32 @@ export function validateAddressSection(
     pinCode: string;
   },
   tenant: AddressTenantContext & { configuredPostalCode?: string | null },
+  mode: AddressValidationMode = 'submit',
 ): Record<string, string[]> {
   const details: Record<string, string[]> = {};
+  const strict = mode === 'submit';
 
-  if (!input.locality) {
+  if (strict && !input.locality) {
     details.locality = ['Locality name is required'];
   }
-  if (!input.colonyName) {
+  if (strict && !input.colonyName) {
     details.colonyName = ['Colony name is required'];
   }
-  if (!input.pinCode) {
-    details.pinCode = ['PIN code is required'];
-  } else if (!isValidPinFormat(input.pinCode)) {
-    details.pinCode = ['PIN must be 6 digits, not starting with 0'];
-  } else if (tenant.configuredPostalCode) {
-    if (input.pinCode !== tenant.configuredPostalCode) {
-      details.pinCode = [`PIN must be ${tenant.configuredPostalCode} for this ULB`];
+
+  if (input.pinCode) {
+    if (!isValidPinFormat(input.pinCode)) {
+      details.pinCode = ['PIN must be 6 digits, not starting with 0'];
+    } else if (strict) {
+      if (tenant.configuredPostalCode) {
+        if (input.pinCode !== tenant.configuredPostalCode) {
+          details.pinCode = [`PIN must be ${tenant.configuredPostalCode} for this ULB`];
+        }
+      } else {
+        details.pinCode = ['Postal code is not configured for this ULB — contact your admin'];
+      }
     }
-  } else {
-    details.pinCode = ['Postal code is not configured for this ULB — contact your admin'];
+  } else if (strict) {
+    details.pinCode = ['PIN code is required'];
   }
 
   if (input.city && input.city !== tenant.cityName) {

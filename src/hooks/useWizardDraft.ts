@@ -10,9 +10,10 @@
  *     (b) keep drafts client-side until "submit"
  *
  *   We pick (b). The wizard writes to AsyncStorage on every step; the
- *   review screen calls `surveys.upsert({...filledDraft})` once everything
- *   is complete. That single call creates (or updates) the server row
- *   atomically. Idempotency via `localId` means even retries are safe.
+ *   Any step can call `surveys.saveDraft` (partial payload, relaxed rules).
+ *   Review calls `surveys.submit` after all steps are complete — full
+ *   validation runs server-side at submit time. Idempotency via `localId`
+ *   means retries are safe.
  *
  * Lifecycle:
  *   - createNewDraft()   → generates a fresh localId, returns the empty draft
@@ -415,6 +416,65 @@ export function useWizardDraft(localId: string | undefined) {
   }, []);
 
   return { draft, loading, update };
+}
+
+/** Map local draft → `surveys.saveDraft` payload (only fields the user has filled). */
+export function draftToSaveDraftPayload(d: WizardDraft) {
+  if (!d.municipalityId) return null;
+
+  const owners = d.owners
+    ?.map((o) => ({
+      name: o.name?.trim() || undefined,
+      fatherOrHusbandName: o.fatherOrHusbandName?.trim() || undefined,
+      mobileNo: o.mobileNo?.trim() || undefined,
+      altMobileNo: o.altMobileNo?.trim() || undefined,
+    }))
+    .filter((o) => o.name || o.fatherOrHusbandName || o.mobileNo || o.altMobileNo);
+
+  return {
+    localId: d.localId,
+    municipalityId: d.municipalityId,
+    clientUpdatedAt: Date.now(),
+    wardNo: d.wardNo?.trim() || undefined,
+    sectorNo: d.sectorNo?.trim() || undefined,
+    oldPropertyNo: d.oldPropertyNo?.trim() || undefined,
+    parcelNo: d.parcelNo?.trim() || undefined,
+    unitNo: d.unitNo?.trim() || undefined,
+    constructedYear: d.constructedYear,
+    isSlum: d.isSlum,
+    respondentName: d.respondentName?.trim() || undefined,
+    relationship: d.relationship?.trim() || undefined,
+    owners: owners?.length ? owners : undefined,
+    familySize: d.familySize,
+    mobileNo: primaryOwnerMobileFromDraft(d),
+    altMobileNo: d.owners?.[0]?.altMobileNo?.trim() || undefined,
+    houseNo: d.houseNo?.trim() || undefined,
+    locality: d.locality?.trim() || undefined,
+    colonyName: d.colonyName?.trim() || undefined,
+    city: d.city?.trim() || undefined,
+    pinCode: d.pinCode?.replace(/\D/g, '').slice(0, 6) || undefined,
+    assessmentYear: d.assessmentYear,
+    ownershipType: d.ownershipType,
+    propertyType: d.propertyType?.trim() || undefined,
+    propertyUse: d.propertyUse,
+    situation: d.situation,
+    roadType: d.roadType,
+    taxRateZone: d.taxRateZone,
+    plotSqft: d.plotSqft,
+    plinthSqft: d.plinthSqft,
+    municipalWaterConnection: d.municipalWaterConnection,
+    waterSource: d.waterSource as 'government_tap' | 'dug_well' | 'borewell' | 'other' | undefined,
+    sanitationType: d.sanitationType as
+      | 'sewer_system'
+      | 'septic_tank'
+      | 'surface_drain'
+      | 'no_toilet'
+      | 'other'
+      | undefined,
+    municipalWasteCollection: d.municipalWasteCollection,
+    electricityNo: d.electricityNo,
+    gps: d.gps,
+  };
 }
 
 /** Map an AsyncStorage draft → `surveys.upsert` payload (filled-required-fields check). */

@@ -37,6 +37,7 @@ export default function AdminTenantsScreen() {
   const [selectedDistrictId, setSelectedDistrictId] = useState('');
   const [ulbCode, setUlbCode] = useState('');
   const [ulbName, setUlbName] = useState('');
+  const [ulbPostalCode, setUlbPostalCode] = useState('');
   const [ulbBodyType, setUlbBodyType] = useState<string>('municipal_council');
 
   const [wardMunicipalityId, setWardMunicipalityId] = useState('');
@@ -132,6 +133,11 @@ export default function AdminTenantsScreen() {
       setToast({ title: 'Select a district first', tone: 'danger' });
       return;
     }
+    const pin = ulbPostalCode.replace(/\D/g, '').slice(0, 6);
+    if (!/^[1-9]\d{5}$/.test(pin)) {
+      setToast({ title: 'Enter a valid 6-digit PIN for this ULB', tone: 'danger' });
+      return;
+    }
     setBusy(true);
     try {
       await upsertMunicipality({
@@ -139,10 +145,12 @@ export default function AdminTenantsScreen() {
         code: ulbCode,
         name: ulbName,
         bodyType: ulbBodyType as 'municipal_council',
+        postalCode: pin,
         isActive: true,
       });
       setUlbCode('');
       setUlbName('');
+      setUlbPostalCode('');
       setToast({ title: 'ULB saved', tone: 'success' });
     } catch (e) {
       setToast({ title: toUserMessage(e), tone: 'danger' });
@@ -299,6 +307,15 @@ export default function AdminTenantsScreen() {
               autoCapitalize="characters"
             />
             <AppInput label="ULB name" value={ulbName} onChangeText={setUlbName} placeholder="Municipal Council name" />
+            <AppInput
+              label="PIN code (fixed for this ULB)"
+              value={ulbPostalCode}
+              onChangeText={(v) => setUlbPostalCode(v.replace(/\D/g, '').slice(0, 6))}
+              placeholder="e.g. 282001"
+              keyboardType="number-pad"
+              maxLength={6}
+              helperText="Surveyors cannot change this PIN — it is tied to the ULB name"
+            />
             <AppDropdown
               placeholder="Body type"
               value={ulbBodyType}
@@ -371,7 +388,10 @@ export default function AdminTenantsScreen() {
                         <View key={u._id} className="py-2 border-b border-line-subtle last:border-b-0">
                           <Text className="text-body text-ink-primary-light dark:text-ink-primary-dark">{u.name}</Text>
                           <Text className="text-helper text-ink-tertiary-light mt-0.5">
-                            {u.code} · {humanizeUlbBodyType(u.bodyType)} · {u.wards.length} wards
+                            {u.code} · {humanizeUlbBodyType(u.bodyType)}
+                            {u.postalCode ? ` · PIN ${u.postalCode}` : ' · PIN not set'}
+                            {' · '}
+                            {u.wards.length} wards
                           </Text>
                           {u.wards.length > 0 ? (
                             <View className="flex-row flex-wrap gap-1.5 mt-2">

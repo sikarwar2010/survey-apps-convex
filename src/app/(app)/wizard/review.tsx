@@ -16,7 +16,14 @@
  */
 import { AppButton, AppCard, Banner, ListRow, SectionLabel, Spinner, StepIndicator, Tag, Toast } from '@/components';
 import { api } from '@/convex/_generated/api';
-import { clearDraft, draftToUpsertArgs, stepCompletion, useWizardDraft } from '@/hooks/useWizardDraft';
+import { useSaveSurveyDraft } from '@/hooks/useSaveSurveyDraft';
+import {
+  clearDraft,
+  draftToSaveDraftPayload,
+  draftToUpsertArgs,
+  stepCompletion,
+  useWizardDraft,
+} from '@/hooks/useWizardDraft';
 import { indicatorSteps, STEP_BEFORE_REVIEW_ROUTE, WIZARD_STEPS } from '@/hooks/wizardSteps';
 import { toUserMessage } from '@/utils/errors';
 import { formatArea, formatSurveyParcelLabel, humanizeRole } from '@/utils/format';
@@ -35,9 +42,7 @@ export default function ReviewScreen() {
   const { draft, loading } = useWizardDraft(localId);
   const masters = useQuery(api.masters.bundle, {});
 
-  const upsert = useMutation(api.surveys.upsert);
-  const upsertFloor = useMutation(api.floors.upsert);
-  const linkPhoto = useMutation(api.photos.linkPhoto);
+  const { save: saveToServer, saving: savingDraft } = useSaveSurveyDraft();
   const submit = useMutation(api.surveys.submit);
 
   const [busy, setBusy] = useState(false);
@@ -55,34 +60,27 @@ export default function ReviewScreen() {
   const districtName =
     bundle.districts.find((d) => d._id === draft.districtId)?.name ?? selectedUlb?.districtName ?? '—';
 
+  const onSaveDraft = async () => {
+    if (!draftToSaveDraftPayload(draft)) {
+      setToast({ title: 'Select district and ULB first', tone: 'danger' });
+      return;
+    }
+    try {
+      await saveToServer(draft);
+      setToast({ title: 'Draft saved — you can continue later', tone: 'success' });
+    } catch (e) {
+      setToast({ title: toUserMessage(e), tone: 'danger' });
+    }
+  };
+
   const onSubmit = async () => {
     if (!args) return;
     setBusy(true);
     try {
-      const surveyId = await upsert(args);
-      for (let i = 0; i < (draft.floors ?? []).length; i++) {
-        const f = draft.floors![i];
-        await upsertFloor({
-          surveyId,
-          clientFloorId: f.clientFloorId,
-          position: i,
-          floorName: f.floorName,
-          usageType: f.usageType,
-          constructionType: f.constructionType,
-          isOccupied: f.isOccupied,
-          areaSqft: f.areaSqft,
-        });
-      }
-      for (const photo of draft.photos ?? []) {
-        await linkPhoto({
-          surveyId,
-          slot: photo.slot,
-          storageId: photo.storageId,
-          sizeKb: photo.sizeKb,
-          width: photo.width,
-          height: photo.height,
-          capturedAt: photo.capturedAt,
-        });
+      const surveyId = await saveToServer(draft);
+      if (!surveyId) {
+        setToast({ title: 'Complete all required steps before submitting', tone: 'danger' });
+        return;
       }
       await submit({ id: surveyId });
       await clearDraft(draft.localId);
@@ -410,15 +408,27 @@ export default function ReviewScreen() {
           )}
         </AppCard>
 
-        <AppButton
-          label={busy ? 'Submitting…' : 'Submit for review'}
-          loading={busy}
-          disabled={!allComplete}
-          onPress={onSubmit}
-          iconLeft="cloud-upload-outline"
-          size="lg"
-          fullWidth
-        />
+        <View className="gap-2">
+          <AppButton
+            label={savingDraft ? 'Saving draft…' : 'Save draft'}
+            variant="outline"
+            loading={savingDraft}
+            disabled={!draftToSaveDraftPayload(draft) || busy}
+            onPress={onSaveDraft}
+            iconLeft="cloud-outline"
+            size="lg"
+            fullWidth
+          />
+          <AppButton
+            label={busy ? 'Submitting…' : 'Submit for review'}
+            loading={busy}
+            disabled={!allComplete || savingDraft}
+            onPress={onSubmit}
+            iconLeft="cloud-upload-outline"
+            size="lg"
+            fullWidth
+          />
+        </View>
       </ScrollView>
 
       {toast ? <Toast visible title={toast.title} tone={toast.tone} onHide={() => setToast(null)} /> : null}

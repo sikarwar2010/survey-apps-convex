@@ -21,6 +21,47 @@ import { assertMunicipalityInScope, resolveTenantScope, tenantDistrictIds, tenan
 
 /* ────────────────────────── shared input validator ────────────────────────── */
 
+/** Partial payload for in-progress saves — only `localId` + `municipalityId` are required. */
+const draftSurveyInput = {
+  localId: v.string(),
+  municipalityId: v.id('municipalities'),
+  clientUpdatedAt: v.number(),
+  wardNo: v.optional(v.string()),
+  sectorNo: v.optional(v.string()),
+  oldPropertyNo: v.optional(v.string()),
+  parcelNo: v.optional(v.string()),
+  unitNo: v.optional(v.string()),
+  constructedYear: v.optional(v.number()),
+  isSlum: v.optional(v.boolean()),
+  respondentName: v.optional(v.string()),
+  relationship: v.optional(v.string()),
+  owners: v.optional(v.array(surveyOwnerEntry)),
+  familySize: v.optional(v.number()),
+  mobileNo: v.optional(v.string()),
+  altMobileNo: v.optional(v.string()),
+  houseNo: v.optional(v.string()),
+  locality: v.optional(v.string()),
+  colonyName: v.optional(v.string()),
+  pinCode: v.optional(v.string()),
+  city: v.optional(v.string()),
+  street: v.optional(v.string()),
+  assessmentYear: v.optional(v.string()),
+  ownershipType: v.optional(v.string()),
+  propertyType: v.optional(v.string()),
+  propertyUse: v.optional(v.string()),
+  situation: v.optional(v.string()),
+  roadType: v.optional(v.string()),
+  taxRateZone: v.optional(v.string()),
+  plotSqft: v.optional(v.number()),
+  plinthSqft: v.optional(v.number()),
+  municipalWaterConnection: v.optional(v.boolean()),
+  waterSource: v.optional(waterSource),
+  sanitationType: v.optional(sanitationType),
+  municipalWasteCollection: v.optional(v.boolean()),
+  electricityNo: v.optional(v.string()),
+  gps: v.optional(gpsCapture),
+};
+
 const surveyInput = {
   localId: v.string(),
   municipalityId: v.id('municipalities'),
@@ -208,17 +249,117 @@ export const getByLocalId = query({
 
 /* ────────────────────────── mutations ────────────────────────── */
 
+const DRAFT_SURVEY_DEFAULTS = {
+  wardNo: '',
+  parcelNo: '',
+  unitNo: '',
+  mobileNo: '',
+  locality: '',
+  colonyName: '',
+  city: '',
+  pinCode: '',
+  assessmentYear: '',
+  ownershipType: '',
+  propertyType: '',
+  propertyUse: '',
+  situation: '',
+  roadType: '',
+  taxRateZone: '',
+  plotSqft: 0,
+  plinthSqft: 0,
+  isSlum: false,
+  municipalWaterConnection: false,
+  waterSource: 'government_tap' as const,
+  sanitationType: 'sewer_system' as const,
+  municipalWasteCollection: false,
+};
+
 /**
- * Idempotent upsert. The mobile calls this once per draft save; if the
- * call retries (network blip), the duplicate is folded into the same row
- * via the `by_surveyor_localId` index.
- *
- * Business rules enforced server-side:
- *  - plinth ≤ plot
- *  - mobile is 10 digits starting 6–9
- *  - pin is 6 digits not starting 0
- *  - the user actually has access to (municipality, ward)
- *  - the ward must exist
+ * Save in-progress survey data without requiring every step to be complete.
+ * Full business rules (PIN vs ULB, owner mobile, taxation, etc.) run on
+ * `submit` instead.
+ */
+export const saveDraft = mutation({
+  args: draftSurveyInput,
+  handler: async (ctx, args) => {
+    const me = await requireUser(ctx);
+    requireRole(me, 'surveyor', 'supervisor', 'admin');
+    const muni = await assertMunicipalityInScope(ctx, me, args.municipalityId);
+
+    const existing = await ctx.db
+      .query('surveys')
+      .withIndex('by_surveyor_localId', (q) => q.eq('surveyorId', me._id).eq('localId', args.localId))
+      .unique();
+
+    if (existing?.qcStatus === 'approved' && me.role === 'surveyor') {
+      clientError('LOCKED', 'This survey is locked — request your supervisor to re-open it');
+    }
+
+    const wardNo = args.wardNo?.trim() ?? existing?.wardNo ?? '';
+    if (wardNo) {
+      assertCanReadWard(me, args.municipalityId, wardNo);
+      const ward = await ctx.db
+        .query('wards')
+        .withIndex('by_municipality_ward', (q) => q.eq('municipalityId', args.municipalityId).eq('wardNo', wardNo))
+        .unique();
+      if (!ward) clientError('BAD_REQUEST', 'Unknown ward', { wardNo: ['unknown ward'] });
+    }
+
+    const district = await ctx.db.get(muni.districtId);
+    const addressCtx = {
+      ...addressTenantContext(muni, district),
+      configuredPostalCode: muni.postalCode,
+    };
+
+    const merged = mergeDraftArgs(existing, args, muni);
+    const normalized = normalizeAddressFields(normalizeOwnerFields(normalizePropertyFields(merged)), muni);
+    validateBusinessRules(normalized, addressCtx, 'draft');
+
+    const writable = { ...stripLocalId(normalized as SurveyUpsertArgs), districtId: muni.districtId };
+
+    if (existing) {
+      const newStatus: Doc<'surveys'>['status'] = existing.status === 'draft' ? 'draft' : existing.status;
+      const newQcStatus: Doc<'surveys'>['qcStatus'] = existing.qcStatus === 'approved' ? 'pending' : existing.qcStatus;
+
+      await ctx.db.patch(existing._id, {
+        ...writable,
+        status: newStatus,
+        qcStatus: newQcStatus,
+        serverVersion: existing.serverVersion + 1,
+        clientUpdatedAt: args.clientUpdatedAt,
+      });
+      await writeAudit(ctx, {
+        actorId: me._id,
+        action: 'survey.draft_saved',
+        entity: 'survey',
+        entityId: existing._id,
+      });
+      return existing._id;
+    }
+
+    const newId = await ctx.db.insert('surveys', {
+      ...writable,
+      surveyorId: me._id,
+      localId: args.localId,
+      status: 'draft',
+      qcStatus: 'pending',
+      serverVersion: 1,
+      clientUpdatedAt: args.clientUpdatedAt,
+    });
+    await writeAudit(ctx, {
+      actorId: me._id,
+      action: 'survey.created',
+      entity: 'survey',
+      entityId: newId,
+      metadata: { localId: args.localId, draft: true },
+    });
+    return newId;
+  },
+});
+
+/**
+ * Idempotent upsert with full validation. Prefer `saveDraft` while filling
+ * the wizard; use this path only when every required field is present.
  *
  * On every write `serverVersion` increments so the client can detect
  * stale-cache conditions.
@@ -237,7 +378,7 @@ export const upsert = mutation({
       configuredPostalCode: muni.postalCode,
     };
     const normalized = normalizeAddressFields(normalizeOwnerFields(normalizePropertyFields(args)), muni);
-    validateBusinessRules(normalized, addressCtx);
+    validateBusinessRules(normalized, addressCtx, 'submit');
 
     // Confirm ward exists within the municipality
     const ward = await ctx.db
@@ -372,6 +513,15 @@ export const submit = mutation({
       clientError('VALIDATION', 'GPS capture required', { gps: ['capture GPS first'] });
     }
 
+    const muni = await ctx.db.get(survey.municipalityId);
+    if (!muni) clientError('NOT_FOUND', 'Municipality not found');
+    const district = await ctx.db.get(muni.districtId);
+    const addressCtx = {
+      ...addressTenantContext(muni, district),
+      configuredPostalCode: muni.postalCode,
+    };
+    validateBusinessRules(survey as unknown as Record<string, unknown>, addressCtx, 'submit');
+
     await ctx.db.patch(args.id, {
       status: 'submitted',
       qcStatus: survey.qcStatus === 'rejected' ? 'pending' : survey.qcStatus,
@@ -426,26 +576,68 @@ export const remove = mutation({
 /* ────────────────────────── internal ────────────────────────── */
 
 type SurveyUpsertArgs = {
-  sectorNo?: string;
-  oldPropertyNo?: string;
+  localId: string;
+  municipalityId: Id<'municipalities'>;
+  clientUpdatedAt: number;
+  wardNo: string;
   parcelNo: string;
   unitNo: string;
+  mobileNo: string;
+  locality: string;
+  colonyName: string;
+  city: string;
+  pinCode: string;
+  assessmentYear: string;
+  ownershipType: string;
+  propertyType: string;
+  propertyUse: string;
+  situation: string;
+  roadType: string;
+  taxRateZone: string;
+  plotSqft: number;
+  plinthSqft: number;
+  isSlum: boolean;
+  municipalWaterConnection: boolean;
+  waterSource: Doc<'surveys'>['waterSource'];
+  sanitationType: Doc<'surveys'>['sanitationType'];
+  municipalWasteCollection: boolean;
+  sectorNo?: string;
+  oldPropertyNo?: string;
   constructedYear?: number;
-  [key: string]: unknown;
+  respondentName?: string;
+  relationship?: string;
+  owners?: Doc<'surveys'>['owners'];
+  familySize?: number;
+  altMobileNo?: string;
+  houseNo?: string;
+  electricityNo?: string;
+  gps?: Doc<'surveys'>['gps'];
+  street?: string;
 };
 
-function normalizePropertyFields<T extends SurveyUpsertArgs>(args: T): T {
+function normalizePropertyFields<
+  T extends { parcelNo?: string; unitNo?: string; sectorNo?: string; oldPropertyNo?: string; constructedYear?: number },
+>(args: T): T {
   return {
     ...args,
     sectorNo: args.sectorNo?.trim() || undefined,
     oldPropertyNo: args.oldPropertyNo?.trim() || undefined,
-    parcelNo: args.parcelNo.trim(),
-    unitNo: args.unitNo.trim(),
+    parcelNo: (args.parcelNo ?? '').trim(),
+    unitNo: (args.unitNo ?? '').trim(),
     constructedYear: args.constructedYear,
   };
 }
 
-function normalizeOwnerFields<T extends SurveyUpsertArgs>(args: T): T {
+function normalizeOwnerFields<
+  T extends {
+    mobileNo?: string;
+    altMobileNo?: string;
+    respondentName?: string;
+    relationship?: string;
+    owners?: Doc<'surveys'>['owners'];
+    familySize?: number;
+  },
+>(args: T): T {
   const trimOpt = (s?: string) => {
     const t = s?.trim();
     return t ? t : undefined;
@@ -469,18 +661,95 @@ function stripLocalId<T extends { localId: string; surveyorId?: Id<'users'> }>(a
   return rest;
 }
 
+type DraftMutationArgs = {
+  localId: string;
+  municipalityId: Id<'municipalities'>;
+  clientUpdatedAt: number;
+  wardNo?: string;
+  [key: string]: unknown;
+};
+
+function mergeDraftArgs(
+  existing: Doc<'surveys'> | null,
+  patch: DraftMutationArgs,
+  muni: Doc<'municipalities'>,
+): SurveyUpsertArgs {
+  const base: SurveyUpsertArgs = existing
+    ? {
+        localId: patch.localId,
+        municipalityId: patch.municipalityId,
+        clientUpdatedAt: patch.clientUpdatedAt,
+        wardNo: existing.wardNo,
+        sectorNo: existing.sectorNo,
+        oldPropertyNo: existing.oldPropertyNo,
+        parcelNo: existing.parcelNo,
+        unitNo: existing.unitNo,
+        constructedYear: existing.constructedYear,
+        isSlum: existing.isSlum,
+        respondentName: existing.respondentName,
+        relationship: existing.relationship,
+        owners: existing.owners,
+        familySize: existing.familySize,
+        mobileNo: existing.mobileNo,
+        altMobileNo: existing.altMobileNo,
+        houseNo: existing.houseNo,
+        locality: existing.locality,
+        colonyName: existing.colonyName,
+        pinCode: existing.pinCode,
+        city: existing.city,
+        assessmentYear: existing.assessmentYear,
+        ownershipType: existing.ownershipType,
+        propertyType: existing.propertyType,
+        propertyUse: existing.propertyUse,
+        situation: existing.situation,
+        roadType: existing.roadType,
+        taxRateZone: existing.taxRateZone,
+        plotSqft: existing.plotSqft,
+        plinthSqft: existing.plinthSqft,
+        municipalWaterConnection: existing.municipalWaterConnection,
+        waterSource: existing.waterSource,
+        sanitationType: existing.sanitationType,
+        municipalWasteCollection: existing.municipalWasteCollection,
+        electricityNo: existing.electricityNo,
+        gps: existing.gps,
+      }
+    : {
+        localId: patch.localId,
+        municipalityId: patch.municipalityId,
+        clientUpdatedAt: patch.clientUpdatedAt,
+        ...DRAFT_SURVEY_DEFAULTS,
+        city: muni.name,
+      };
+
+  const { localId: _l, municipalityId: _m, clientUpdatedAt: _c, ...fields } = patch;
+  return { ...base, ...pickDefined(fields) };
+}
+
+function pickDefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
+  const out: Partial<T> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined) out[k as keyof T] = v as T[keyof T];
+  }
+  return out;
+}
+
 function validateBusinessRules(
   in_: Record<string, unknown>,
   addressCtx: Parameters<typeof validateAddressSection>[1],
+  mode: 'draft' | 'submit' = 'submit',
 ): void {
   const details: Record<string, string[]> = {};
+  const strict = mode === 'submit';
 
   Object.assign(
     details,
-    validateOwnerSection({
-      relationship: in_.relationship as string | undefined,
-      owners: in_.owners as Parameters<typeof validateOwnerSection>[0]['owners'],
-    }),
+    validateOwnerSection(
+      {
+        relationship: in_.relationship as string | undefined,
+        owners: in_.owners as Parameters<typeof validateOwnerSection>[0]['owners'],
+      },
+      { requirePrimaryMobile: strict },
+    ),
   );
   Object.assign(
     details,
@@ -493,6 +762,7 @@ function validateBusinessRules(
         pinCode: in_.pinCode as string,
       },
       addressCtx,
+      mode,
     ),
   );
   const plot = in_.plotSqft as unknown as number;
@@ -506,32 +776,41 @@ function validateBusinessRules(
   }
 
   const parcelNo = String(in_.parcelNo ?? '').trim();
-  if (!parcelNo) {
+  if (strict && !parcelNo) {
     details.parcelNo = ['Parcel number is required'];
   }
   const unitNo = String(in_.unitNo ?? '').trim();
-  if (!unitNo) {
+  if (strict && !unitNo) {
     details.unitNo = ['Unit number is required'];
+  }
+  if (strict && !String(in_.assessmentYear ?? '').trim()) {
+    details.assessmentYear = ['Assessment year is required'];
   }
   Object.assign(
     details,
-    validateTaxationSection({
-      ownershipType: in_.ownershipType as string | undefined,
-      propertyUse: in_.propertyUse as string | undefined,
-      propertyType: in_.propertyType as string | undefined,
-      situation: in_.situation as string | undefined,
-      roadType: in_.roadType as string | undefined,
-      taxRateZone: in_.taxRateZone as string | undefined,
-    }),
+    validateTaxationSection(
+      {
+        ownershipType: in_.ownershipType as string | undefined,
+        propertyUse: in_.propertyUse as string | undefined,
+        propertyType: in_.propertyType as string | undefined,
+        situation: in_.situation as string | undefined,
+        roadType: in_.roadType as string | undefined,
+        taxRateZone: in_.taxRateZone as string | undefined,
+      },
+      mode,
+    ),
   );
   Object.assign(
     details,
-    validateServicesSection({
-      municipalWaterConnection: in_.municipalWaterConnection as boolean | undefined,
-      waterSource: in_.waterSource as string | undefined,
-      sanitationType: in_.sanitationType as string | undefined,
-      municipalWasteCollection: in_.municipalWasteCollection as boolean | undefined,
-    }),
+    validateServicesSection(
+      {
+        municipalWaterConnection: in_.municipalWaterConnection as boolean | undefined,
+        waterSource: in_.waterSource as string | undefined,
+        sanitationType: in_.sanitationType as string | undefined,
+        municipalWasteCollection: in_.municipalWasteCollection as boolean | undefined,
+      },
+      mode,
+    ),
   );
   const constructedYear = in_.constructedYear as unknown as number | undefined;
   if (constructedYear != null) {
@@ -540,7 +819,7 @@ function validateBusinessRules(
       details.constructedYear = [`Enter a year between 1800 and ${currentYear}`];
     }
   }
-  if (in_.gps && (in_.gps as unknown as { accuracyMeters: number }).accuracyMeters > 500) {
+  if (strict && in_.gps && (in_.gps as unknown as { accuracyMeters: number }).accuracyMeters > 500) {
     details.gps = ['GPS accuracy too poor; retake outside'];
   }
   if (Object.keys(details).length > 0) {

@@ -125,6 +125,9 @@ export const upsertMunicipality = mutation({
     if (postalCode && !/^[1-9]\d{5}$/.test(postalCode)) {
       clientError('BAD_REQUEST', 'Postal code must be 6 digits, not starting with 0');
     }
+    if (!args.id && !postalCode) {
+      clientError('BAD_REQUEST', 'PIN code is required for each ULB');
+    }
 
     const dup = await ctx.db
       .query('municipalities')
@@ -134,16 +137,30 @@ export const upsertMunicipality = mutation({
       clientError('BAD_REQUEST', 'ULB code already exists');
     }
 
-    const row = {
+    const row: {
+      districtId: Id<'districts'>;
+      code: string;
+      name: string;
+      bodyType: (typeof args)['bodyType'];
+      isActive: boolean;
+      postalCode?: string;
+    } = {
       districtId: args.districtId,
       code,
       name: args.name.trim(),
       bodyType: args.bodyType,
-      postalCode: postalCode || undefined,
       isActive: args.isActive,
     };
+    if (postalCode) {
+      row.postalCode = postalCode;
+    }
 
     if (args.id) {
+      const existing = await ctx.db.get(args.id);
+      if (!existing) clientError('BAD_REQUEST', 'Unknown municipality');
+      if (!row.postalCode && !existing.postalCode) {
+        clientError('BAD_REQUEST', 'PIN code is required for each ULB');
+      }
       await ctx.db.patch(args.id, row);
       await writeAudit(ctx, {
         actorId: me._id,

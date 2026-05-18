@@ -100,21 +100,36 @@ export function validateWaterAndSanitation(input: {
   return details;
 }
 
-export function validateServicesSection(input: {
-  municipalWaterConnection?: boolean;
-  waterSource?: string;
-  sanitationType?: string;
-  municipalWasteCollection?: boolean;
-}): Record<string, string[]> {
+export function validateServicesSection(
+  input: {
+    municipalWaterConnection?: boolean;
+    waterSource?: string;
+    sanitationType?: string;
+    municipalWasteCollection?: boolean;
+  },
+  mode: 'draft' | 'submit' = 'submit',
+): Record<string, string[]> {
   const details: Record<string, string[]> = {};
+  const strict = mode === 'submit';
 
-  if (typeof input.municipalWaterConnection !== 'boolean') {
+  if (strict && typeof input.municipalWaterConnection !== 'boolean') {
     details.municipalWaterConnection = ['Select Yes or No for municipal water connection'];
   }
 
-  Object.assign(details, validateWaterAndSanitation(input));
+  if (strict) {
+    Object.assign(details, validateWaterAndSanitation(input));
+  } else {
+    const water = input.waterSource?.trim() ?? '';
+    if (water && !isValidWaterSource(water)) {
+      details.waterSource = ['Select a valid water source'];
+    }
+    const sanitation = input.sanitationType?.trim() ?? '';
+    if (sanitation && !isValidSanitationType(sanitation)) {
+      details.sanitationType = ['Select a valid sanitation type'];
+    }
+  }
 
-  if (typeof input.municipalWasteCollection !== 'boolean') {
+  if (strict && typeof input.municipalWasteCollection !== 'boolean') {
     details.municipalWasteCollection = ['Select Yes or No for door-to-door waste collection'];
   }
 

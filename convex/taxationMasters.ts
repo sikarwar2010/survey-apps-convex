@@ -93,37 +93,63 @@ export function isValidPropertyUseSubcategory(propertyUse: string, subcategory: 
   return allowed ? allowed.has(subcategory) : false;
 }
 
-export function validateTaxationSection(input: {
-  ownershipType?: string;
-  propertyUse?: string;
-  propertyType?: string;
-  situation?: string;
-  roadType?: string;
-  taxRateZone?: string;
-}): Record<string, string[]> {
+export function validateTaxationSection(
+  input: {
+    ownershipType?: string;
+    propertyUse?: string;
+    propertyType?: string;
+    situation?: string;
+    roadType?: string;
+    taxRateZone?: string;
+  },
+  mode: 'draft' | 'submit' = 'submit',
+): Record<string, string[]> {
   const details: Record<string, string[]> = {};
+  const strict = mode === 'submit';
 
-  if (!input.ownershipType || !OWNERSHIP_SET.has(input.ownershipType)) {
+  const ownership = input.ownershipType?.trim() ?? '';
+  if (strict && (!ownership || !OWNERSHIP_SET.has(ownership))) {
+    details.ownershipType = ['Select a valid ownership type'];
+  } else if (ownership && !OWNERSHIP_SET.has(ownership)) {
     details.ownershipType = ['Select a valid ownership type'];
   }
-  if (!input.propertyUse || !PROPERTY_USE_SET.has(input.propertyUse)) {
+
+  const propertyUse = input.propertyUse?.trim() ?? '';
+  if (strict && (!propertyUse || !PROPERTY_USE_SET.has(propertyUse))) {
+    details.propertyUse = ['Select a valid property use'];
+  } else if (propertyUse && !PROPERTY_USE_SET.has(propertyUse)) {
     details.propertyUse = ['Select a valid property use'];
   }
+
   const sub = input.propertyType?.trim() ?? '';
-  if (input.propertyUse && propertyUseRequiresSubcategory(input.propertyUse)) {
-    if (!sub || !isValidPropertyUseSubcategory(input.propertyUse, sub)) {
+  if (propertyUse && propertyUseRequiresSubcategory(propertyUse)) {
+    if (strict && (!sub || !isValidPropertyUseSubcategory(propertyUse, sub))) {
       details.propertyType = ['Select a valid property use subcategory'];
+    } else if (sub && !isValidPropertyUseSubcategory(propertyUse, sub)) {
+      details.propertyType = ['Subcategory is not valid for this property use'];
     }
-  } else if (sub && input.propertyUse && !isValidPropertyUseSubcategory(input.propertyUse, sub)) {
+  } else if (sub && propertyUse && !isValidPropertyUseSubcategory(propertyUse, sub)) {
     details.propertyType = ['Subcategory is not valid for this property use'];
   }
-  if (!input.situation || !SITUATION_SET.has(input.situation)) {
+
+  const situation = input.situation?.trim() ?? '';
+  if (strict && (!situation || !SITUATION_SET.has(situation))) {
+    details.situation = ['Select a valid situation'];
+  } else if (situation && !SITUATION_SET.has(situation)) {
     details.situation = ['Select a valid situation'];
   }
-  if (!input.roadType || !ROAD_TYPE_SET.has(input.roadType)) {
+
+  const roadType = input.roadType?.trim() ?? '';
+  if (strict && (!roadType || !ROAD_TYPE_SET.has(roadType))) {
+    details.roadType = ['Select a valid road type'];
+  } else if (roadType && !ROAD_TYPE_SET.has(roadType)) {
     details.roadType = ['Select a valid road type'];
   }
-  if (!input.taxRateZone || !TAX_ZONE_SET.has(input.taxRateZone)) {
+
+  const taxRateZone = input.taxRateZone?.trim() ?? '';
+  if (strict && (!taxRateZone || !TAX_ZONE_SET.has(taxRateZone))) {
+    details.taxRateZone = ['Select a valid road size tax zone'];
+  } else if (taxRateZone && !TAX_ZONE_SET.has(taxRateZone)) {
     details.taxRateZone = ['Select a valid road size tax zone'];
   }
 

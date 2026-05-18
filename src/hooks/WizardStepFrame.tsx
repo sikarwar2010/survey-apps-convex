@@ -7,13 +7,15 @@
  * scaffold what to do on save (`onSave`) which is also the next-step
  * action.
  */
-import { Spinner } from '@/components/index';
+import { Spinner, Toast } from '@/components/index';
 import { FloatingSaveBar, WizardHeader } from '@/components/wizard';
-import { useWizardDraft, type WizardDraft } from '@/hooks/useWizardDraft';
+import { useSaveSurveyDraft } from '@/hooks/useSaveSurveyDraft';
+import { draftToSaveDraftPayload, useWizardDraft, type WizardDraft } from '@/hooks/useWizardDraft';
 import { indicatorSteps, nextStep, prevStep, WIZARD_STEPS, type StepConfig } from '@/hooks/wizardSteps';
+import { toUserMessage } from '@/utils/errors';
 import { backOrReplace } from '@/utils/navigation';
 import { useRouter } from 'expo-router';
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -41,6 +43,8 @@ export function WizardStepFrame({
 }: WizardStepFrameProps) {
   const router = useRouter();
   const { draft, loading: loadingDraft, update } = useWizardDraft(localId);
+  const { save: saveToServer, saving: savingDraft } = useSaveSurveyDraft();
+  const [toast, setToast] = useState<{ title: string; tone: 'success' | 'danger' } | null>(null);
 
   if (loadingDraft || !draft) {
     return (
@@ -63,6 +67,21 @@ export function WizardStepFrame({
     if (ok === false) return;
     const next = nextStep(activeKey);
     router.replace({ pathname: next as never, params: { localId } });
+  };
+
+  const canSaveDraft = Boolean(draftToSaveDraftPayload(draft));
+
+  const onSaveDraft = async () => {
+    try {
+      const surveyId = await saveToServer(draft);
+      if (!surveyId) {
+        setToast({ title: 'Select district and ULB first', tone: 'danger' });
+        return;
+      }
+      setToast({ title: 'Draft saved to cloud', tone: 'success' });
+    } catch (e) {
+      setToast({ title: toUserMessage(e), tone: 'danger' });
+    }
   };
 
   const onPickStep = (key: string) => {
@@ -89,12 +108,16 @@ export function WizardStepFrame({
         </ScrollView>
         <FloatingSaveBar
           onBack={prevStep(activeKey) ? goBack : undefined}
+          onSaveDraft={canSaveDraft ? onSaveDraft : undefined}
           onNext={goNext}
           nextLabel={activeKey === 'photos' ? 'Continue to review' : 'Save & continue'}
           nextDisabled={nextBlocked}
+          saveDraftDisabled={!canSaveDraft}
           loading={loading}
+          savingDraft={savingDraft}
         />
       </KeyboardAvoidingView>
+      {toast ? <Toast visible title={toast.title} tone={toast.tone} onHide={() => setToast(null)} /> : null}
     </View>
   );
 }
