@@ -122,6 +122,9 @@ export const list = query({
     status: v.optional(surveyStatus),
     qcStatus: v.optional(qcStatus),
     wardNo: v.optional(v.string()),
+    districtId: v.optional(v.id('districts')),
+    municipalityId: v.optional(v.id('municipalities')),
+    surveyorId: v.optional(v.id('users')),
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
@@ -134,6 +137,13 @@ export const list = query({
     const districtIds = tenantDistrictIds(scope);
     const muniIds = tenantMunicipalityIds(scope);
 
+    if (args.municipalityId) {
+      await assertMunicipalityInScope(ctx, me, args.municipalityId);
+    }
+    if (args.districtId && me.role !== 'admin' && !districtIds.has(args.districtId)) {
+      clientError('FORBIDDEN', 'This district is outside your assigned scope');
+    }
+
     let rows: Doc<'surveys'>[];
     if (me.role === 'surveyor') {
       rows = await ctx.db
@@ -143,31 +153,63 @@ export const list = query({
         .take(limit * 2);
       rows = rows.filter((r) => !r.districtId || districtIds.has(r.districtId)).slice(0, limit);
     } else if (me.role === 'supervisor') {
-      if (scope.districts.length === 1) {
+      const districtKey = args.districtId ?? (scope.districts.length === 1 ? scope.districts[0]!._id : undefined);
+      const muniKey = args.municipalityId ?? me.municipalityId;
+
+      if (muniKey) {
+        rows = await ctx.db
+          .query('surveys')
+          .withIndex('by_municipality_status', (q) =>
+            args.status ? q.eq('municipalityId', muniKey).eq('status', args.status) : q.eq('municipalityId', muniKey),
+          )
+          .order('desc')
+          .take(limit * 2);
+      } else if (districtKey) {
         rows = await ctx.db
           .query('surveys')
           .withIndex('by_district_status', (q) =>
-            args.status
-              ? q.eq('districtId', scope.districts[0]!._id).eq('status', args.status)
-              : q.eq('districtId', scope.districts[0]!._id),
+            args.status ? q.eq('districtId', districtKey).eq('status', args.status) : q.eq('districtId', districtKey),
           )
           .order('desc')
-          .take(limit);
-      } else if (me.municipalityId) {
+          .take(limit * 2);
+      } else {
+        return [];
+      }
+      rows = rows.slice(0, limit);
+    } else if (me.role === 'admin') {
+      if (args.municipalityId) {
         rows = await ctx.db
           .query('surveys')
           .withIndex('by_municipality_status', (q) =>
             args.status
-              ? q.eq('municipalityId', me.municipalityId!).eq('status', args.status)
-              : q.eq('municipalityId', me.municipalityId!),
+              ? q.eq('municipalityId', args.municipalityId!).eq('status', args.status)
+              : q.eq('municipalityId', args.municipalityId!),
           )
           .order('desc')
-          .take(limit);
+          .take(limit * 2);
+      } else if (args.districtId) {
+        rows = await ctx.db
+          .query('surveys')
+          .withIndex('by_district_status', (q) =>
+            args.status
+              ? q.eq('districtId', args.districtId!).eq('status', args.status)
+              : q.eq('districtId', args.districtId!),
+          )
+          .order('desc')
+          .take(limit * 2);
+      } else if (args.surveyorId) {
+        rows = await ctx.db
+          .query('surveys')
+          .withIndex('by_surveyor', (q) => q.eq('surveyorId', args.surveyorId!))
+          .order('desc')
+          .take(limit * 2);
       } else {
-        return [];
+        rows = await ctx.db
+          .query('surveys')
+          .order('desc')
+          .take(limit * 2);
       }
-    } else if (me.role === 'admin') {
-      rows = await ctx.db.query('surveys').order('desc').take(limit);
+      rows = rows.slice(0, limit);
     } else {
       rows = [];
     }
@@ -175,6 +217,15 @@ export const list = query({
     rows = rows.filter((r) => muniIds.has(r.municipalityId));
 
     // Apply remaining filters in memory — they're small once the index has narrowed.
+    if (args.districtId) {
+      rows = rows.filter((r) => r.districtId === args.districtId);
+    }
+    if (args.municipalityId) {
+      rows = rows.filter((r) => r.municipalityId === args.municipalityId);
+    }
+    if (args.surveyorId) {
+      rows = rows.filter((r) => r.surveyorId === args.surveyorId);
+    }
     if (args.status && me.role !== 'supervisor') {
       rows = rows.filter((r) => r.status === args.status);
     }

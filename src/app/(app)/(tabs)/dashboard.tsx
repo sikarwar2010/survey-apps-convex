@@ -5,6 +5,7 @@
  * tiles and recent list refresh themselves as new surveys land.
  */
 import { AppButton, Banner, EmptyState, KpiCard, PulseDot, SectionLabel, Spinner, SurveyCard } from '@/components';
+import { SurveyStatsBreakdown } from '@/components/admin/survey-stats-breakdown';
 import { api } from '@/convex/_generated/api';
 import { humanizeRole, surveyOwnerListLabel } from '@/utils/format';
 import { useQuery } from 'convex/react';
@@ -22,6 +23,8 @@ export default function DashboardScreen() {
     return <Spinner label="Loading…" />;
   }
   if (!me) return null;
+
+  const isSupervisor = me.role === 'supervisor';
 
   return (
     <View className="flex-1 bg-page-light dark:bg-page-dark">
@@ -49,14 +52,23 @@ export default function DashboardScreen() {
       </SafeAreaView>
 
       <ScrollView contentContainerStyle={{ padding: 14, paddingBottom: 24 }}>
-        <View className="flex-row gap-2 mb-3">
-          <KpiCard label="Today" value={counts.today} icon="today-outline" tone="brand" />
-          <KpiCard label="Drafts" value={counts.drafts} icon="create-outline" tone="warning" />
-        </View>
-        <View className="flex-row gap-2 mb-4">
-          <KpiCard label="Submitted" value={counts.submitted} icon="cloud-upload-outline" tone="info" />
-          <KpiCard label="Approved" value={counts.approved} icon="checkmark-circle" tone="success" />
-        </View>
+        {isSupervisor ? (
+          <>
+            <SectionLabel>Team analytics</SectionLabel>
+            <SurveyStatsBreakdown eyebrow="Scoped to your district or ULB assignment" />
+          </>
+        ) : (
+          <>
+            <View className="flex-row gap-2 mb-3">
+              <KpiCard label="Today" value={counts.today} icon="today-outline" tone="brand" />
+              <KpiCard label="Drafts" value={counts.drafts} icon="create-outline" tone="warning" />
+            </View>
+            <View className="flex-row gap-2 mb-4">
+              <KpiCard label="Submitted" value={counts.submitted} icon="cloud-upload-outline" tone="info" />
+              <KpiCard label="Approved" value={counts.approved} icon="checkmark-circle" tone="success" />
+            </View>
+          </>
+        )}
 
         {counts.rejected > 0 ? (
           <Banner
@@ -68,13 +80,15 @@ export default function DashboardScreen() {
           />
         ) : null}
 
-        <AppButton
-          label="Start new survey"
-          iconLeft="add"
-          size="lg"
-          onPress={() => router.push('/(app)/wizard')}
-          fullWidth
-        />
+        {!isSupervisor ? (
+          <AppButton
+            label="Start new survey"
+            iconLeft="add"
+            size="lg"
+            onPress={() => router.push('/(app)/wizard')}
+            fullWidth
+          />
+        ) : null}
 
         <View className="flex-row items-center justify-between mt-5 mb-2">
           <SectionLabel>Recent</SectionLabel>

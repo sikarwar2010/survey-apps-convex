@@ -1,62 +1,38 @@
 /**
- * Start Expo with --tunnel using your own ngrok account.
+ * Start Expo with --tunnel using Expo's WS proxy (no ngrok account required).
  *
- * `bunx expo start --tunnel` uses Expo's shared ngrok token, which is often
- * exhausted and fails with:
- *   Cannot read properties of undefined (reading 'body')
- *
- * This script patches @expo/cli to use NGROK_AUTHTOKEN from .env.local instead.
+ * Ngrok in @expo/ngrok-bin v2.3.41 no longer works with ngrok cloud (error 103).
+ * We set EXPO_USE_WS_TUNNEL=1 so @expo/cli uses @expo/ws-tunnel instead.
  */
-import { spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { execSync, spawn } from "node:child_process";
+import { loadEnvLocal } from "./load-env-local.mjs";
 import { patchExpoNgrok } from "./patch-expo-ngrok.mjs";
-
-function loadEnvLocal() {
-  const path = join(process.cwd(), ".env.local");
-  if (!existsSync(path)) return;
-  for (const line of readFileSync(path, "utf8").split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const eq = trimmed.indexOf("=");
-    if (eq === -1) continue;
-    const key = trimmed.slice(0, eq).trim();
-    if (process.env[key]) continue;
-    let val = trimmed.slice(eq + 1).trim();
-    if (
-      (val.startsWith('"') && val.endsWith('"')) ||
-      (val.startsWith("'") && val.endsWith("'"))
-    ) {
-      val = val.slice(1, -1);
-    }
-    process.env[key] = val;
-  }
-}
+import { patchExpoWsTunnel } from "./patch-expo-ws-tunnel.mjs";
+import { patchNgrokClient } from "./patch-ngrok-client.mjs";
 
 loadEnvLocal();
 
-const token = process.env.NGROK_AUTHTOKEN?.trim();
-if (!token) {
-  console.error("\nTunnel mode needs your own ngrok token (Expo's shared tunnel is unreliable).\n");
-  console.error("1. Free account: https://dashboard.ngrok.com/signup");
-  console.error("2. Copy token:    https://dashboard.ngrok.com/get-started/your-authtoken");
-  console.error("3. Add to .env.local:");
-  console.error("     NGROK_AUTHTOKEN=your_token_here");
-  console.error("4. Run:  bun run start:tunnel\n");
-  console.error("If ngrok still fails (agent version ERR_NGROK_121 on free tier), use:");
-  console.error("  bun run start              # same Wi‑Fi");
-  console.error("  bun run android:usb        # Android USB");
-  console.error("  cloudflared tunnel --url http://localhost:8081  # then EXPO_PACKAGER_PROXY_URL=… bun run start\n");
-  process.exit(1);
-}
-
 try {
-  patchExpoNgrok(token);
-  console.log("Using NGROK_AUTHTOKEN from .env.local for tunnel mode.\n");
+  patchExpoWsTunnel();
+  patchExpoNgrok();
+  patchNgrokClient();
 } catch (err) {
   console.error(err instanceof Error ? err.message : err);
   process.exit(1);
 }
+
+process.env.EXPO_USE_WS_TUNNEL = "1";
+
+try {
+  if (process.platform === "win32") {
+    execSync("taskkill /F /IM ngrok.exe", { stdio: "ignore" });
+  }
+} catch {
+  /* none running */
+}
+
+console.log("Starting Expo with WebSocket tunnel (no ngrok token needed).\n");
+console.log("Same Wi‑Fi without tunnel:  bun run start\n");
 
 const child = spawn("bunx", ["expo", "start", "--tunnel"], {
   stdio: "inherit",

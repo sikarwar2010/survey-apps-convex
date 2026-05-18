@@ -36,10 +36,6 @@ import '../../global.css';
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
-const convex = new ConvexReactClient(env.convexUrl, {
-  unsavedChangesWarning: false,
-});
-
 /* ────────────────────────── Auth gate ────────────────────────── */
 
 function AuthLoadingView({ message }: { message: string }) {
@@ -146,6 +142,27 @@ function AuthGate() {
 
 /* ────────────────────────── Root ────────────────────────── */
 
+function AppProviders() {
+  const convex = useMemo(
+    () =>
+      new ConvexReactClient(env.convexUrl, {
+        unsavedChangesWarning: false,
+      }),
+    [],
+  );
+
+  return (
+    <ClerkProvider publishableKey={env.clerkPublishableKey} tokenCache={tokenCache}>
+      <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
+        <ThemeProvider>
+          <StatusBar style="auto" />
+          <AuthGate />
+        </ThemeProvider>
+      </ConvexProviderWithClerk>
+    </ClerkProvider>
+  );
+}
+
 export function ErrorBoundary({ error, retry }: { error: Error; retry: () => void }) {
   return <AppErrorBoundary error={error} retry={retry} />;
 }
@@ -155,14 +172,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <ConfigGate>
-          <ClerkProvider publishableKey={env.clerkPublishableKey} tokenCache={tokenCache}>
-            <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
-              <ThemeProvider>
-                <StatusBar style="auto" />
-                <AuthGate />
-              </ThemeProvider>
-            </ConvexProviderWithClerk>
-          </ClerkProvider>
+          <AppProviders />
         </ConfigGate>
       </SafeAreaProvider>
     </GestureHandlerRootView>

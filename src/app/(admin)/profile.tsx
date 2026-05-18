@@ -1,11 +1,11 @@
-import { AppButton, AppCard, Avatar, ListRow, SectionLabel, Spinner, Tag } from "@/components";
-import { AdminHeader } from "@/components/admin/admin-header";
-import { api } from "@/convex/_generated/api";
-import { humanizeRole } from "@/utils/format";
-import { useAuth } from "@clerk/expo";
-import { useQuery } from "convex/react";
-import { useRouter } from "expo-router";
-import { Alert, ScrollView, Text, View } from "react-native";
+import { AppButton, AppCard, Avatar, ListRow, SectionLabel, Spinner, Tag } from '@/components';
+import { AdminHeader } from '@/components/admin/admin-header';
+import { api } from '@/convex/_generated/api';
+import { humanizeRole } from '@/utils/format';
+import { useAuth } from '@clerk/expo';
+import { useQuery } from 'convex/react';
+import { useRouter } from 'expo-router';
+import { Alert, ScrollView, Text, View } from 'react-native';
 
 export default function AdminProfileScreen() {
   const router = useRouter();
@@ -17,12 +17,12 @@ export default function AdminProfileScreen() {
   if (!me) return <Spinner label="Loading profile…" />;
 
   const pendingCount = pending?.length ?? 0;
-  const activeUsers = users?.filter((u) => u.status === "active").length ?? 0;
+  const activeUsers = users?.filter((u) => u.status === 'active').length ?? 0;
 
   const onSignOut = () => {
-    Alert.alert("Sign out?", "You'll need to sign in again to continue.", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Sign out", style: "destructive", onPress: () => signOut() },
+    Alert.alert('Sign out?', "You'll need to sign in again to continue.", [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Sign out', style: 'destructive', onPress: () => signOut() },
     ]);
   };
 
@@ -66,12 +66,10 @@ export default function AdminProfileScreen() {
             iconTone="brand"
             title="Approvals"
             subtitle={
-              pendingCount > 0
-                ? `${pendingCount} request${pendingCount === 1 ? "" : "s"} waiting`
-                : "Inbox clear"
+              pendingCount > 0 ? `${pendingCount} request${pendingCount === 1 ? '' : 's'} waiting` : 'Inbox clear'
             }
             rightText={pendingCount > 0 ? String(pendingCount) : undefined}
-            onPress={() => router.push("/(admin)/approvals")}
+            onPress={() => router.push('/(admin)/approvals')}
           />
           <View className="h-px bg-line-subtle" />
           <ListRow
@@ -79,7 +77,15 @@ export default function AdminProfileScreen() {
             iconTone="neutral"
             title="Users"
             subtitle="Browse and filter accounts"
-            onPress={() => router.push("/(admin)/users")}
+            onPress={() => router.push('/(admin)/users')}
+          />
+          <View className="h-px bg-line-subtle" />
+          <ListRow
+            icon="bar-chart-outline"
+            iconTone="brand"
+            title="Survey reports"
+            subtitle="District, ULB, and surveyor analytics"
+            onPress={() => router.push('/(admin)/reports')}
           />
           <View className="h-px bg-line-subtle" />
           <ListRow
@@ -87,18 +93,12 @@ export default function AdminProfileScreen() {
             iconTone="neutral"
             title="Masters"
             subtitle="Municipalities, wards, and lookups"
-            onPress={() => router.push("/(admin)/masters")}
+            onPress={() => router.push('/(admin)/masters')}
           />
         </AppCard>
 
         <SectionLabel>Account</SectionLabel>
-        <AppButton
-          label="Sign out"
-          variant="outline"
-          iconLeft="log-out-outline"
-          onPress={onSignOut}
-          fullWidth
-        />
+        <AppButton label="Sign out" variant="outline" iconLeft="log-out-outline" onPress={onSignOut} fullWidth />
       </ScrollView>
     </View>
   );

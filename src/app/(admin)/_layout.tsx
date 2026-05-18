@@ -51,6 +51,15 @@ export default function AdminLayout() {
         }}
       />
       <Tabs.Screen
+        name="reports"
+        options={{
+          title: 'Reports',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'bar-chart' : 'bar-chart-outline'} size={22} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="tenants"
         options={{
           title: 'Tenants',
