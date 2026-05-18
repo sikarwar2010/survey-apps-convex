@@ -3,7 +3,7 @@
  *
  * Order of providers (outside → in):
  *   ClerkProvider                     → owns sign-in/sign-up state + tokens
- *   ConvexProviderWithClerk          → injects fresh JWTs into every Convex call
+ *   ConvexProviderWithAuth           → injects Clerk `convex` JWTs into every Convex call
  *   ThemeProvider                     → app design tokens
  *
  * AuthGate handles three states:
@@ -19,13 +19,14 @@ import { AppLoadingView } from '@/components/app-loading-view';
 import { ConfigGate } from '@/components/config-gate';
 import { ConvexAuthError } from '@/components/convex-auth-error';
 import { env } from '@/config/env';
+import { useAuthForConvex } from '@/hooks/use-auth-for-convex';
 import { useClerkConvexAuth } from '@/hooks/use-clerk-convex-auth';
+import { useSessionBootstrap } from '@/hooks/use-session-bootstrap';
 import { useSyncConvexUser } from '@/hooks/use-sync-convex-user';
 import { ThemeProvider } from '@/theme';
 import { tokenCache } from '@/utils/tokenCache';
 import { ClerkProvider, useAuth } from '@clerk/expo';
-import { ConvexReactClient } from 'convex/react';
-import { ConvexProviderWithClerk } from 'convex/react-clerk';
+import { ConvexProviderWithAuth, ConvexReactClient } from 'convex/react';
 import { Slot, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -56,6 +57,7 @@ function AuthGate() {
   const { isSignedIn, isLoaded } = useAuth();
   const { convexReady, convexAuthFailed, convexAuthLoading } = useClerkConvexAuth();
   const { me, needsSync, syncing } = useSyncConvexUser();
+  const { showBlockingOverlay } = useSessionBootstrap(me, needsSync, syncing);
   const segments = useSegments();
   const router = useRouter();
 
@@ -113,13 +115,10 @@ function AuthGate() {
     return <ConvexAuthError />;
   }
 
-  const showSignedInLoading =
-    isSignedIn && (convexAuthLoading || !convexReady || me === undefined || (needsSync && syncing));
-
   return (
     <View className="flex-1">
       <Slot />
-      {showSignedInLoading ? (
+      {showBlockingOverlay ? (
         <View className="absolute inset-0 z-10" pointerEvents="auto">
           <AppLoadingView message={loadingMessage} />
         </View>
@@ -141,12 +140,12 @@ function AppProviders() {
 
   return (
     <ClerkProvider publishableKey={env.clerkPublishableKey} tokenCache={tokenCache}>
-      <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
+      <ConvexProviderWithAuth client={convex} useAuth={useAuthForConvex}>
         <ThemeProvider>
           <StatusBar style="auto" />
           <AuthGate />
         </ThemeProvider>
-      </ConvexProviderWithClerk>
+      </ConvexProviderWithAuth>
     </ClerkProvider>
   );
 }

@@ -1,8 +1,8 @@
-import { useAuth } from "@clerk/expo";
-import { useConvexAuth } from "convex/react";
-import { useEffect, useState } from "react";
+import { useAuth } from '@clerk/expo';
+import { useConvexAuth } from 'convex/react';
+import { useEffect, useState } from 'react';
 
-const CONVEX_AUTH_TIMEOUT_MS = 20_000;
+const CONVEX_AUTH_TIMEOUT_MS = 30_000;
 
 /**
  * Clerk session + Convex JWT bridge state.
@@ -25,14 +25,9 @@ export function useClerkConvexAuth() {
     return () => clearTimeout(t);
   }, [isSignedIn, convexAuthLoading, isAuthenticated]);
 
-  const convexReady =
-    clerkLoaded && Boolean(isSignedIn) && !convexAuthLoading && isAuthenticated;
+  const convexReady = clerkLoaded && Boolean(isSignedIn) && !convexAuthLoading && isAuthenticated;
 
-  const convexAuthFailed =
-    clerkLoaded &&
-    Boolean(isSignedIn) &&
-    !convexAuthLoading &&
-    !isAuthenticated;
+  const convexAuthFailed = clerkLoaded && Boolean(isSignedIn) && !convexAuthLoading && !isAuthenticated;
 
   return {
     clerkLoaded,
