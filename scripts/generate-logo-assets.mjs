@@ -6,7 +6,7 @@
  * Run: node scripts/generate-logo-assets.mjs
  * Requires: npm install --save-dev sharp
  */
-import { mkdir, access } from 'node:fs/promises';
+import { access, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -27,29 +27,14 @@ async function main() {
   await mkdir(outDir, { recursive: true });
 
   const trimmed = await sharp(src).trim({ threshold: 12 }).png().toBuffer();
-  const meta = await sharp(trimmed).metadata();
 
   await sharp(trimmed).png({ compressionLevel: 9 }).toFile(path.join(outDir, 'logo-display.png'));
 
-  const side = Math.max(meta.width ?? 512, meta.height ?? 512);
-  const iconPad = Math.round(side * 0.08);
-  const iconSize = side + iconPad * 2;
-
   await sharp(trimmed)
-    .resize({
-      width: iconSize - iconPad * 2,
-      height: iconSize - iconPad * 2,
-      fit: 'inside',
-      withoutEnlargement: false,
-    })
-    .extend({
-      top: iconPad,
-      bottom: iconPad,
-      left: iconPad,
-      right: iconPad,
+    .resize(1024, 1024, {
+      fit: 'contain',
       background: { r: 255, g: 255, b: 255, alpha: 1 },
     })
-    .resize(1024, 1024, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 1 } })
     .png()
     .toFile(path.join(outDir, 'logo-icon.png'));
 

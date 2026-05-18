@@ -9,10 +9,12 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.surveyapp.app"
+      "bundleIdentifier": "com.surveyapp.app",
+      "buildNumber": "1"
     },
     "android": {
       "package": "com.surveyapp.app",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/logo-icon.png",
         "backgroundColor": "#FFFFFF"
@@ -40,7 +42,9 @@
       [
         "expo-image-picker",
         {
-          "cameraPermission": "Allow $(PRODUCT_NAME) to take survey photos."
+          "cameraPermission": "Allow $(PRODUCT_NAME) to take survey photos.",
+          "photosPermission": false,
+          "microphonePermission": false
         }
       ],
       [
