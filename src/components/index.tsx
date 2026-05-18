@@ -11,11 +11,11 @@ import { formatSqmDisplay, parseAreaInput, sqftFromSqm, sqmFromSqft } from '@/ut
 import { formatSurveyParcelLabel } from '@/utils/format';
 import { optionLabel } from '@/utils/services';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { ReactNode, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
-  Image,
   Modal,
   Platform,
   Pressable,
@@ -1105,6 +1105,11 @@ export function PhotoSlot({
   const meta = PHOTO_SLOT_META[slot];
   const has = !!previewUri || !!captured;
   const borderTone = has ? 'border-success/40' : required ? 'border-brand/25' : 'border-line-subtle';
+  const [previewFailed, setPreviewFailed] = useState(false);
+
+  useEffect(() => {
+    setPreviewFailed(false);
+  }, [previewUri]);
 
   return (
     <View
@@ -1139,9 +1144,15 @@ export function PhotoSlot({
               <ActivityIndicator color="#003B8E" />
               <Text className="text-caption text-ink-tertiary-light mt-2">Uploading…</Text>
             </View>
-          ) : previewUri ? (
+          ) : previewUri && !previewFailed ? (
             <>
-              <Image source={{ uri: previewUri }} className="w-full h-full" resizeMode="cover" />
+              <Image
+                source={{ uri: previewUri }}
+                style={{ width: '100%', height: '100%' }}
+                contentFit="cover"
+                recyclingKey={previewUri}
+                onError={() => setPreviewFailed(true)}
+              />
               <View className="absolute inset-x-0 bottom-0 bg-black/45 py-1.5 items-center">
                 <Text className="text-[11px] font-medium text-white">Tap to retake</Text>
               </View>

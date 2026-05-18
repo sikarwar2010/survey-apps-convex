@@ -4,8 +4,9 @@
 import { humanizeRole } from '@/utils/format';
 import { SURVEY_PHOTO_SLOT_LABEL, type SurveyPhotoSlot } from '@/utils/surveyPhotos';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useState } from 'react';
-import { Image, Modal, Pressable, Text, View } from 'react-native';
+import { Modal, Pressable, Text, View } from 'react-native';
 
 const SLOT_ORDER: Record<string, number> = {
   front: 0,
@@ -45,7 +46,12 @@ export function SurveyPhotoGrid({ photos, canRetake = false }: { photos: SurveyP
           >
             <View className="rounded-lg overflow-hidden border border-line-subtle bg-page-light dark:bg-page-dark h-36">
               {p.url ? (
-                <Image source={{ uri: p.url }} className="w-full h-36" resizeMode="cover" />
+                <Image
+                  source={{ uri: p.url }}
+                  style={{ width: '100%', height: 144 }}
+                  contentFit="cover"
+                  recyclingKey={p.url}
+                />
               ) : (
                 <View className="flex-1 items-center justify-center p-3">
                   <Ionicons name="image-outline" size={32} color="#9CA3AF" />
@@ -73,9 +79,9 @@ export function SurveyPhotoGrid({ photos, canRetake = false }: { photos: SurveyP
             <View>
               <Image
                 source={{ uri: preview.url }}
-                className="w-full rounded-lg"
-                style={{ aspectRatio: 4 / 3 }}
-                resizeMode="contain"
+                style={{ width: '100%', aspectRatio: 4 / 3, borderRadius: 8 }}
+                contentFit="contain"
+                recyclingKey={preview.url}
               />
               <Text className="text-white text-center mt-3 text-body font-medium">{slotLabel(preview.slot)}</Text>
               <Text className="text-white/60 text-center mt-1 text-caption">Tap anywhere to close</Text>

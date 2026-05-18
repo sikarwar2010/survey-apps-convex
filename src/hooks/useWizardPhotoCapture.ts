@@ -4,6 +4,7 @@
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
 import type { WizardDraft } from '@/hooks/useWizardDraft';
+import { pickSurveyPhotoFromCamera, uploadSurveyPhotoBytes } from '@/utils/captureSurveyPhoto';
 import {
   filterSurveyPhotos,
   REQUIRED_SURVEY_PHOTO_SLOTS,
@@ -12,9 +13,7 @@ import {
   type WizardPhotoEntry,
 } from '@/utils/surveyPhotos';
 import { useMutation } from 'convex/react';
-import * as ImageManipulator from 'expo-image-manipulator';
-import * as ImagePicker from 'expo-image-picker';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 
 export function useWizardPhotoCapture({
@@ -33,6 +32,7 @@ export function useWizardPhotoCapture({
 
   const [uploadingSlot, setUploadingSlot] = useState<SurveyPhotoSlot | null>(null);
   const [previewBySlot, setPreviewBySlot] = useState<Partial<Record<SurveyPhotoSlot, string>>>({});
+  const captureInFlight = useRef(false);
 
   const surveyPhotos = filterSurveyPhotos(draft.photos);
   const photoBySlot = new Map(surveyPhotos.map((p) => [p.slot, p]));
@@ -66,43 +66,24 @@ export function useWizardPhotoCapture({
 
   const capture = useCallback(
     async (slot: SurveyPhotoSlot) => {
+      if (captureInFlight.current) return;
+      captureInFlight.current = true;
       try {
-        const perm = await ImagePicker.requestCameraPermissionsAsync();
-        if (!perm.granted) {
-          Alert.alert('Camera permission needed', 'Allow camera access in settings to capture survey photos.');
-          return;
-        }
-        const picked = await ImagePicker.launchCameraAsync({
-          mediaTypes: ['images'],
-          quality: 0.9,
-          exif: false,
-        });
-        if (picked.canceled || picked.assets.length === 0) return;
+        const picked = await pickSurveyPhotoFromCamera();
+        if (picked.canceled) return;
 
         const existing = photoBySlot.get(slot);
         setUploadingSlot(slot);
 
-        const compressed = await ImageManipulator.manipulateAsync(picked.assets[0].uri, [{ resize: { width: 1280 } }], {
-          compress: 0.7,
-          format: ImageManipulator.SaveFormat.JPEG,
-        });
-
         const uploadUrl = await generateUploadUrl({});
-        const blob = await (await fetch(compressed.uri)).blob();
-        const res = await fetch(uploadUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'image/jpeg' },
-          body: blob,
-        });
-        if (!res.ok) throw new Error(`Upload failed (${res.status})`);
-        const { storageId } = (await res.json()) as { storageId: Id<'_storage'> };
+        const { storageId, sizeKb } = await uploadSurveyPhotoBytes(uploadUrl, picked.jpegBytes);
 
         const entry: WizardPhotoEntry & { slot: SurveyPhotoSlot } = {
           slot,
           storageId,
-          sizeKb: Math.round(blob.size / 1024),
-          width: compressed.width,
-          height: compressed.height,
+          sizeKb,
+          width: picked.width,
+          height: picked.height,
           capturedAt: Date.now(),
         };
 
@@ -115,7 +96,7 @@ export function useWizardPhotoCapture({
         await update({ photos: next });
         await syncPhotoToServer(entry);
 
-        setPreviewBySlot((prev) => ({ ...prev, [slot]: compressed.uri }));
+        setPreviewBySlot((prev) => ({ ...prev, [slot]: picked.uri }));
         return { ok: true as const, label: SURVEY_PHOTO_SLOT_LABEL[slot] };
       } catch (e) {
         return {
@@ -124,6 +105,7 @@ export function useWizardPhotoCapture({
         };
       } finally {
         setUploadingSlot(null);
+        captureInFlight.current = false;
       }
     },
     [generateUploadUrl, photoBySlot, releasePhoto, surveyPhotos, syncPhotoToServer, update],

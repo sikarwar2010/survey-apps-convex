@@ -4,7 +4,11 @@
  * Step 7 — GPS capture. Target ±2–3 m outdoors; accepts up to ±20 m on phones.
  */
 import { AppButton, AppCard, Banner, GPSStatus, SectionLabel, Spinner, Tag } from '@/components';
-import { GPS_EXCELLENT_ACCURACY_METERS, GPS_TARGET_ACCURACY_METERS } from '@/convex/gpsAccuracy';
+import {
+  GPS_EXCELLENT_ACCURACY_METERS,
+  GPS_SAMPLE_DURATION_MS,
+  GPS_TARGET_ACCURACY_METERS,
+} from '@/convex/gpsAccuracy';
 import { WizardStepFrame } from '@/hooks/WizardStepFrame';
 import {
   captureGpsWithTargetAccuracy,
@@ -35,6 +39,7 @@ function StepGPS() {
     <WizardStepFrame localId={localId} activeKey="gps" title="GPS location" subtitle="Stand outside the property">
       {({ draft, update }) => {
         const capture = async () => {
+          if (state === 'locating') return;
           setError(null);
           setLastAttemptMeters(null);
           setSampling(null);
@@ -43,11 +48,11 @@ function StepGPS() {
             const gps = await captureGpsWithTargetAccuracy((p) => setSampling(p));
             await update({ gps });
             setState('captured');
-            setSampling(null);
           } catch (e) {
             if (e instanceof GpsAccuracyError) setLastAttemptMeters(e.accuracyMeters);
             setError(e instanceof Error ? e.message : 'Could not get location');
             setState('error');
+          } finally {
             setSampling(null);
           }
         };
@@ -153,7 +158,7 @@ function StepGPS() {
             <Banner
               tone="info"
               title="±2–3 m target"
-              message={`Stand outside with a clear sky view. The app samples up to 30 seconds. Target ±${GPS_TARGET_ACCURACY_METERS} m (±${GPS_EXCELLENT_ACCURACY_METERS} m is excellent). Readings up to ±20 m are accepted when the signal is weak.`}
+              message={`Stand outside with a clear sky view. Capture usually finishes in a few seconds (up to ${Math.round(GPS_SAMPLE_DURATION_MS / 1000)} s). Target ±${GPS_TARGET_ACCURACY_METERS} m (±${GPS_EXCELLENT_ACCURACY_METERS} m is excellent). Readings up to ±20 m are accepted when the signal is weak.`}
               icon="information-circle-outline"
               className="mt-3"
             />

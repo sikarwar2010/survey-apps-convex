@@ -6,11 +6,13 @@ import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
 import type { WizardDraft } from '@/hooks/useWizardDraft';
 import { useWizardPhotoCapture } from '@/hooks/useWizardPhotoCapture';
+import { warmCameraModule } from '@/utils/captureSurveyPhoto';
 import { REQUIRED_SURVEY_PHOTO_SLOTS, SURVEY_PHOTO_SLOT_LABEL, type SurveyPhotoSlot } from '@/utils/surveyPhotos';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from 'convex/react';
-import { useMemo } from 'react';
-import { ActivityIndicator, Image, Text, View } from 'react-native';
+import { Image } from 'expo-image';
+import { useEffect, useMemo } from 'react';
+import { ActivityIndicator, Text, View } from 'react-native';
 
 const SLOT_HINT: Record<SurveyPhotoSlot, string> = {
   front: 'Full façade from the street',
@@ -30,6 +32,10 @@ export function ReviewPhotosSection({
 }) {
   const { photoBySlot, previewBySlot, uploadingSlot, capturedCount, requiredCount, capture, confirmRemove } =
     useWizardPhotoCapture({ draft, update, serverSurveyId });
+
+  useEffect(() => {
+    void warmCameraModule();
+  }, []);
 
   const storageIds = useMemo(
     () => REQUIRED_SURVEY_PHOTO_SLOTS.map((s) => photoBySlot.get(s)?.storageId).filter(Boolean) as Id<'_storage'>[],
@@ -151,7 +157,12 @@ function ReviewPhotoCard({
             </Text>
           </View>
         ) : previewUri ? (
-          <Image source={{ uri: previewUri }} className="w-full h-52" resizeMode="cover" />
+          <Image
+            source={{ uri: previewUri }}
+            style={{ width: '100%', height: 208 }}
+            contentFit="cover"
+            recyclingKey={previewUri}
+          />
         ) : (
           <View className="flex-1 min-h-[180px] items-center justify-center px-4">
             <Ionicons name="image-outline" size={36} color="#9CA3AF" />

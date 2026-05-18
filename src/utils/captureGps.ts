@@ -1,10 +1,14 @@
 import {
   GPS_ACCEPT_MAX_ACCURACY_METERS,
   GPS_EXCELLENT_ACCURACY_METERS,
+  GPS_MIN_SAMPLES_ACCEPT,
+  GPS_MIN_SAMPLES_TARGET,
   GPS_SAMPLE_DURATION_MS,
+  GPS_SAMPLE_POLL_MS,
   GPS_TARGET_ACCURACY_METERS,
 } from '@/convex/gpsAccuracy';
 import type { WizardDraft } from '@/hooks/useWizardDraft';
+import * as Location from 'expo-location';
 
 export type GpsCapture = NonNullable<WizardDraft['gps']>;
 
@@ -24,6 +28,18 @@ export class GpsAccuracyError extends Error {
     this.name = 'GpsAccuracyError';
     this.accuracyMeters = accuracyMeters;
   }
+}
+
+function toCaptureError(e: unknown): Error {
+  if (e instanceof GpsAccuracyError) return e;
+  const raw = e instanceof Error ? e.message : String(e);
+  if (/split bundle|ERR_NGROK|ngrok|offline|Unable to resolve module/i.test(raw)) {
+    return new Error(
+      'GPS could not start. Restart the dev server and reopen the app, or use a release build in the field.',
+    );
+  }
+  if (e instanceof Error) return e;
+  return new Error(raw || 'Could not get location');
 }
 
 function isMockLocation(loc: { mocked?: boolean }): boolean {
@@ -95,8 +111,27 @@ function fuseSamples(samples: LocationSample[]): LocationCoords | null {
 export async function captureGpsWithTargetAccuracy(
   onProgress?: (progress: GpsCaptureProgress) => void,
 ): Promise<GpsCapture> {
-  const Location = await import('expo-location');
+  try {
+    return await captureGpsWithTargetAccuracyInner(onProgress);
+  } catch (e) {
+    throw toCaptureError(e);
+  }
+}
 
+function shouldStopSampling(bestAcc: number | null | undefined, sampleCount: number, elapsedMs: number): boolean {
+  if (bestAcc == null) return false;
+  if (bestAcc <= GPS_EXCELLENT_ACCURACY_METERS) return true;
+  if (bestAcc <= GPS_TARGET_ACCURACY_METERS && sampleCount >= GPS_MIN_SAMPLES_TARGET) return true;
+  if (bestAcc <= GPS_ACCEPT_MAX_ACCURACY_METERS && sampleCount >= GPS_MIN_SAMPLES_ACCEPT && elapsedMs >= 1_500) {
+    return true;
+  }
+  if (bestAcc <= GPS_ACCEPT_MAX_ACCURACY_METERS && elapsedMs >= 5_000) return true;
+  return false;
+}
+
+async function captureGpsWithTargetAccuracyInner(
+  onProgress?: (progress: GpsCaptureProgress) => void,
+): Promise<GpsCapture> {
   const { status } = await Location.requestForegroundPermissionsAsync();
   if (status !== 'granted') {
     throw new Error('Location permission is required to continue');
@@ -117,55 +152,63 @@ export async function captureGpsWithTargetAccuracy(
   const best = { coords: null as LocationCoords | null };
   const started = Date.now();
 
+  const ingest = (loc: Location.LocationObject) => {
+    if (isMockLocation(loc)) return;
+    const coords: LocationCoords = {
+      latitude: loc.coords.latitude,
+      longitude: loc.coords.longitude,
+      accuracy: loc.coords.accuracy,
+    };
+    samples.push({ coords, mocked: loc.mocked });
+    if (isBetter(coords, best.coords)) best.coords = coords;
+    onProgress?.({
+      bestAccuracyMeters: best.coords?.accuracy ?? null,
+      sampleCount: samples.length,
+      elapsedMs: Date.now() - started,
+    });
+  };
+
+  const quickFix = Location.getCurrentPositionAsync({
+    accuracy: Location.Accuracy.High,
+    mayShowUserSettingsDialog: true,
+  })
+    .then(ingest)
+    .catch(() => undefined);
+
   const subscription = await Location.watchPositionAsync(
     {
-      accuracy: Location.Accuracy.BestForNavigation,
-      timeInterval: 500,
-      distanceInterval: 0,
+      accuracy: Location.Accuracy.High,
+      timeInterval: 300,
+      distanceInterval: 1,
     },
-    (loc) => {
-      if (isMockLocation(loc)) return;
-      const coords: LocationCoords = {
-        latitude: loc.coords.latitude,
-        longitude: loc.coords.longitude,
-        accuracy: loc.coords.accuracy,
-      };
-      samples.push({ coords, mocked: loc.mocked });
-      if (isBetter(coords, best.coords)) best.coords = coords;
-      onProgress?.({
-        bestAccuracyMeters: best.coords?.accuracy ?? null,
-        sampleCount: samples.length,
-        elapsedMs: Date.now() - started,
-      });
-    },
+    ingest,
   );
 
   try {
     const deadline = started + GPS_SAMPLE_DURATION_MS;
     while (Date.now() < deadline) {
-      await new Promise((r) => setTimeout(r, 500));
-      const bestAcc = best.coords?.accuracy;
-      if (bestAcc != null && bestAcc <= GPS_EXCELLENT_ACCURACY_METERS) break;
-      if (bestAcc != null && bestAcc <= GPS_TARGET_ACCURACY_METERS && samples.length >= 6) break;
+      const elapsedMs = Date.now() - started;
+      if (shouldStopSampling(best.coords?.accuracy, samples.length, elapsedMs)) break;
+      await new Promise((r) => setTimeout(r, GPS_SAMPLE_POLL_MS));
     }
+    await quickFix;
   } finally {
     subscription.remove();
   }
 
   if (!best.coords) {
     const single = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.BestForNavigation,
+      accuracy: Location.Accuracy.High,
       mayShowUserSettingsDialog: true,
     });
     if (isMockLocation(single)) {
       throw new Error('Mock location detected — disable fake GPS and use the device antenna');
     }
-    best.coords = {
-      latitude: single.coords.latitude,
-      longitude: single.coords.longitude,
-      accuracy: single.coords.accuracy,
-    };
-    samples.push({ coords: best.coords, mocked: single.mocked });
+    ingest(single);
+  }
+
+  if (!best.coords) {
+    throw new Error('Could not get a GPS fix — move to open sky and try again');
   }
 
   const fused = fuseSamples(samples) ?? best.coords;

@@ -11,5 +11,14 @@ export const GPS_ACCEPT_MAX_ACCURACY_METERS = 20;
 /** @deprecated Use GPS_ACCEPT_MAX_ACCURACY_METERS — kept for existing imports */
 export const GPS_MAX_ACCURACY_METERS = GPS_ACCEPT_MAX_ACCURACY_METERS;
 
-/** How long to sample fixes before accepting the best reading. */
-export const GPS_SAMPLE_DURATION_MS = 30_000;
+/** Max time to refine a fix (ms). Stops earlier when accuracy thresholds are met. */
+export const GPS_SAMPLE_DURATION_MS = 10_000;
+
+/** Minimum fixes before accepting a reading at the “acceptable” tier (≤20 m). */
+export const GPS_MIN_SAMPLES_ACCEPT = 2;
+
+/** Minimum fixes before accepting at the target tier (≤3 m). */
+export const GPS_MIN_SAMPLES_TARGET = 2;
+
+/** Poll interval while waiting for a good fix (ms). */
+export const GPS_SAMPLE_POLL_MS = 200;

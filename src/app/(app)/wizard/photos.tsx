@@ -5,9 +5,10 @@ import { AppCard, Banner, PhotoSlot, Tag, Toast } from '@/components';
 import { WizardStepFrame } from '@/hooks/WizardStepFrame';
 import type { WizardDraft } from '@/hooks/useWizardDraft';
 import { useWizardPhotoCapture } from '@/hooks/useWizardPhotoCapture';
+import { warmCameraModule } from '@/utils/captureSurveyPhoto';
 import { REQUIRED_SURVEY_PHOTO_SLOTS, type SurveyPhotoSlot } from '@/utils/surveyPhotos';
 import { useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 
 const SLOT_SUBTITLE: Record<SurveyPhotoSlot, string> = {
@@ -35,6 +36,10 @@ function PhotoFields({
 }) {
   const [toast, setToast] = useState<{ title: string; tone: 'success' | 'danger' } | null>(null);
 
+  useEffect(() => {
+    void warmCameraModule();
+  }, []);
+
   const { photoBySlot, previewBySlot, uploadingSlot, capturedCount, requiredCount, capture, confirmRemove } =
     useWizardPhotoCapture({
       draft,
@@ -45,6 +50,7 @@ function PhotoFields({
   const allCaptured = capturedCount === requiredCount;
 
   const onCapture = async (slot: SurveyPhotoSlot) => {
+    if (uploadingSlot) return;
     const result = await capture(slot);
     if (result?.ok) {
       setToast({ title: `${result.label} saved`, tone: 'success' });
