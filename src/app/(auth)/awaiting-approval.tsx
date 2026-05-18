@@ -6,14 +6,15 @@
  * flips `status` to `active`, Convex pushes the update and AuthGate
  * routes the user into the app.
  */
-import { AppButton, AppCard, Avatar, ListRow, PulseDot, Tag } from "@/components";
-import { useSyncConvexUser } from "@/hooks/use-sync-convex-user";
-import { timeAgo } from "@/utils/format";
-import { useAuth } from "@clerk/expo";
-import { Ionicons } from "@expo/vector-icons";
-import { useEffect, useState } from "react";
-import { ActivityIndicator, ScrollView, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { AppButton, AppCard, Avatar, ListRow, PulseDot, Tag } from '@/components';
+import { AppLoadingView } from '@/components/app-loading-view';
+import { useSyncConvexUser } from '@/hooks/use-sync-convex-user';
+import { timeAgo } from '@/utils/format';
+import { useAuth } from '@clerk/expo';
+import { Ionicons } from '@expo/vector-icons';
+import { useEffect, useState } from 'react';
+import { ScrollView, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function AwaitingApprovalScreen() {
   const { signOut } = useAuth();
@@ -28,21 +29,12 @@ export default function AwaitingApprovalScreen() {
   }, []);
 
   if (!me) {
-    return (
-      <View className="flex-1 items-center justify-center bg-page-light dark:bg-page-dark">
-        <ActivityIndicator color="#003B8E" size="large" />
-        {syncing ? null : (
-          <Text className="mt-4 text-helper text-ink-tertiary-light">
-            Loading your profile…
-          </Text>
-        )}
-      </View>
-    );
+    return <AppLoadingView message={syncing ? 'Setting up your account…' : 'Loading your profile…'} />;
   }
 
   return (
     <View className="flex-1 bg-page-light dark:bg-page-dark">
-      <SafeAreaView edges={["top"]} className="bg-brand">
+      <SafeAreaView edges={['top']} className="bg-brand">
         <View className="items-center py-7">
           <Avatar name={me.name} tone="brand" size="xl" />
           <Text className="text-h2 font-medium text-white mt-2.5">{me.name}</Text>
@@ -65,8 +57,8 @@ export default function AwaitingApprovalScreen() {
                 Your account is being reviewed
               </Text>
               <Text className="text-helper text-ink-tertiary-light dark:text-ink-tertiary-dark mt-1">
-                An administrator from your municipality will approve access shortly. This page
-                will update automatically once you're approved — no need to refresh.
+                An administrator from your municipality will approve access shortly. This page will update automatically
+                once you're approved — no need to refresh.
               </Text>
             </View>
           </View>
@@ -80,7 +72,7 @@ export default function AwaitingApprovalScreen() {
             icon="briefcase-outline"
             iconTone="brand"
             title="Role"
-            subtitle={me.requestedRole ?? "Not specified"}
+            subtitle={me.requestedRole ?? 'Not specified'}
             showChevron={false}
           />
           <View className="h-px bg-line-subtle" />
@@ -88,7 +80,7 @@ export default function AwaitingApprovalScreen() {
             icon="chatbubble-outline"
             iconTone="neutral"
             title="Reason"
-            subtitle={me.requestedReason || "—"}
+            subtitle={me.requestedReason || '—'}
             showChevron={false}
           />
           <View className="h-px bg-line-subtle" />
@@ -106,7 +98,11 @@ export default function AwaitingApprovalScreen() {
         </Text>
         <AppCard padded className="mb-4">
           <Step n={1} title="Administrator reviews your request" body="Typically within 1 business day." />
-          <Step n={2} title="Role and wards are assigned" body="You'll be given access to specific wards in your municipality." />
+          <Step
+            n={2}
+            title="Role and wards are assigned"
+            body="You'll be given access to specific wards in your municipality."
+          />
           <Step n={3} title="You're notified and routed to the app" body="This screen will change automatically." />
         </AppCard>
 
@@ -115,13 +111,7 @@ export default function AwaitingApprovalScreen() {
           <Tag label="Email verified" tone="success" icon="mail-open" />
         </View>
 
-        <AppButton
-          label="Sign out"
-          variant="outline"
-          iconLeft="log-out-outline"
-          onPress={() => signOut()}
-          fullWidth
-        />
+        <AppButton label="Sign out" variant="outline" iconLeft="log-out-outline" onPress={() => signOut()} fullWidth />
       </ScrollView>
     </View>
   );
@@ -134,12 +124,8 @@ function Step({ n, title, body }: { n: number; title: string; body: string }) {
         <Text className="text-[11px] font-medium text-brand">{n}</Text>
       </View>
       <View className="flex-1 ml-3">
-        <Text className="text-[13px] font-medium text-ink-primary-light dark:text-ink-primary-dark">
-          {title}
-        </Text>
-        <Text className="text-caption text-ink-tertiary-light dark:text-ink-tertiary-dark mt-0.5">
-          {body}
-        </Text>
+        <Text className="text-[13px] font-medium text-ink-primary-light dark:text-ink-primary-dark">{title}</Text>
+        <Text className="text-caption text-ink-tertiary-light dark:text-ink-tertiary-dark mt-0.5">{body}</Text>
       </View>
     </View>
   );

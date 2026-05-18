@@ -15,6 +15,7 @@
 import 'react-native-gesture-handler';
 
 import { AppErrorBoundary } from '@/components/app-error-boundary';
+import { AppLoadingView } from '@/components/app-loading-view';
 import { ConfigGate } from '@/components/config-gate';
 import { ConvexAuthError } from '@/components/convex-auth-error';
 import { env } from '@/config/env';
@@ -29,7 +30,7 @@ import { Slot, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo } from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import '../../global.css';
@@ -37,20 +38,6 @@ import '../../global.css';
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 /* ────────────────────────── Auth gate ────────────────────────── */
-
-function AuthLoadingView({ message }: { message: string }) {
-  return (
-    <View className="flex-1 items-center justify-center bg-page-light px-6 dark:bg-page-dark">
-      <View className="mb-6 h-20 w-20 items-center justify-center rounded-xl bg-brand-soft dark:bg-brand/20">
-        <Text className="text-[22px] font-medium text-brand">SDV</Text>
-      </View>
-      <ActivityIndicator color="#003B8E" size="large" />
-      <Text className="mt-4 text-center text-helper text-ink-tertiary-light dark:text-ink-tertiary-dark">
-        {message}
-      </Text>
-    </View>
-  );
-}
 
 function signedInLoadingMessage(
   convexAuthLoading: boolean,
@@ -118,7 +105,7 @@ function AuthGate() {
   );
 
   if (!isLoaded) {
-    return <AuthLoadingView message="Starting Survey field operations…" />;
+    return <AppLoadingView message="Starting property survey operations…" />;
   }
 
   if (isSignedIn && convexAuthFailed) {
@@ -133,7 +120,7 @@ function AuthGate() {
       <Slot />
       {showSignedInLoading ? (
         <View className="absolute inset-0 z-10" pointerEvents="auto">
-          <AuthLoadingView message={loadingMessage} />
+          <AppLoadingView message={loadingMessage} />
         </View>
       ) : null}
     </View>

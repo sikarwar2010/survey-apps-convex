@@ -8,14 +8,13 @@
  *  5. AuthGate routes to awaiting-approval when `me.status !== "active"`
  */
 import { AppButton, AppInput, RadioGroup } from '@/components';
+import { AuthHero } from '@/components/auth/auth-hero';
 import { clerkErrorMessage } from '@/components/auth/field-error';
 import { useSignUp } from '@clerk/expo';
-import { Ionicons } from '@expo/vector-icons';
 import { Link, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 type Stage = 'details' | 'verify';
 type RequestedRole = 'surveyor' | 'supervisor';
@@ -125,13 +124,7 @@ export default function SignUpScreen() {
     <View className="flex-1 bg-brand">
       <StatusBar style="light" />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
-        <SafeAreaView edges={['top']}>
-          <View className="px-4 py-3 flex-row items-center">
-            <Pressable onPress={() => router.back()} hitSlop={8} className="w-9 h-9 items-center justify-center">
-              <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
-            </Pressable>
-          </View>
-        </SafeAreaView>
+        <AuthHero onBack={() => router.back()} />
 
         <ScrollView
           className="flex-1 bg-surface-light dark:bg-surface-dark rounded-t-3xl"

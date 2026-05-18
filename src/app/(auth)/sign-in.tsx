@@ -6,13 +6,13 @@
  *  3. AuthGate loads Convex user and routes
  */
 import { AppButton, AppInput } from '@/components';
+import { AuthHero } from '@/components/auth/auth-hero';
 import { clerkErrorMessage } from '@/components/auth/field-error';
 import { useSignIn } from '@clerk/expo';
 import { Link } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 type Stage = 'credentials' | 'mfa';
 type MfaStrategy = 'email_code' | 'phone_code' | 'totp' | 'backup_code';
@@ -196,13 +196,7 @@ export default function SignInScreen() {
     <View className="flex-1 bg-brand">
       <StatusBar style="light" />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
-        <SafeAreaView edges={['top']} className="items-center pt-7 pb-7">
-          <View className="w-16 h-16 bg-white rounded-xl items-center justify-center">
-            <Text className="text-[22px] font-medium text-brand">SDV</Text>
-          </View>
-          <Text className="text-white text-h2 font-medium mt-3.5">Property Survey</Text>
-          <Text className="text-white/70 text-caption mt-0.5">Nagar Panchayat · GIS field</Text>
-        </SafeAreaView>
+        <AuthHero />
 
         <ScrollView
           className="flex-1 bg-surface-light dark:bg-surface-dark rounded-t-3xl"
