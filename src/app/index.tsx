@@ -1,6 +1,6 @@
-import { Redirect } from "expo-router";
+import { View } from 'react-native';
 
-/** Entry route — AuthGate sends signed-in users to the right group. */
+/** AuthGate in root layout handles all routing after startup. */
 export default function Index() {
-  return <Redirect href="/(auth)/sign-in" />;
+  return <View className="flex-1 bg-brand" />;
 }

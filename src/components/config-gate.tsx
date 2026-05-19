@@ -1,29 +1,30 @@
 import { authStyles } from '@/components/auth/styles';
-import { env, envReady } from '@/config/env';
+import { getEnvIssues } from '@/config/env';
 import type { ReactNode } from 'react';
 import { ScrollView, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export function ConfigGate({ children }: { children: ReactNode }) {
-  if (envReady) return children;
-
-  const missing: string[] = [];
-  if (!env.convexUrl) missing.push('EXPO_PUBLIC_CONVEX_URL');
-  if (!env.clerkPublishableKey) missing.push('EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY');
+  const issues = getEnvIssues();
+  if (issues.length === 0) return children;
 
   return (
     <SafeAreaView style={authStyles.safe}>
       <ScrollView contentContainerStyle={authStyles.scroll}>
-        <Text style={authStyles.title}>Configuration required</Text>
+        <Text style={authStyles.title}>App not configured</Text>
         <Text style={authStyles.subtitle}>
-          Add these keys to `.env.local` for local dev, or set them as EAS / build secrets for production
-          (`EXPO_PUBLIC_*` is inlined at build time):
+          This install is missing API keys that must be set on EAS before building the APK. Add them under Project →
+          Environment variables → preview (or production), then create a new build and install again from the QR code.
         </Text>
-        {missing.map((key) => (
+        {issues.map((key) => (
           <Text key={key} style={[authStyles.label, { fontFamily: 'monospace' }]}>
             {key}
           </Text>
         ))}
+        <Text style={[authStyles.subtitle, { marginTop: 16 }]}>
+          Local dev: copy `.env.example` to `.env.local`. EAS: run `eas env:list --environment preview` and confirm both
+          keys are present, then `npm run eas:build:android:preview`.
+        </Text>
       </ScrollView>
     </SafeAreaView>
   );

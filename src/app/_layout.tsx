@@ -16,16 +16,18 @@ import { AppErrorBoundary } from '@/components/app-error-boundary';
 import { AppLoadingView } from '@/components/app-loading-view';
 import { ConfigGate } from '@/components/config-gate';
 import { ConvexAuthError } from '@/components/convex-auth-error';
-import { env } from '@/config/env';
+import { RootErrorBoundary } from '@/components/root-error-boundary';
+import { env, envReady } from '@/config/env';
 import { useAuthForConvex } from '@/hooks/use-auth-for-convex';
 import { useClerkConvexAuth } from '@/hooks/use-clerk-convex-auth';
+import { useSafeRouter } from '@/hooks/use-safe-router';
 import { useSessionBootstrap } from '@/hooks/use-session-bootstrap';
 import { useSyncConvexUser } from '@/hooks/use-sync-convex-user';
 import { ThemeProvider } from '@/theme';
 import { tokenCache } from '@/utils/tokenCache';
 import { ClerkProvider, useAuth } from '@clerk/expo';
 import { ConvexProviderWithAuth, ConvexReactClient } from 'convex/react';
-import { Slot, useRouter, useSegments } from 'expo-router';
+import { Slot } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo } from 'react';
@@ -56,19 +58,22 @@ function AuthGate() {
   const { convexReady, convexAuthFailed, convexAuthLoading } = useClerkConvexAuth();
   const { me, needsSync, syncing } = useSyncConvexUser();
   const { showBlockingOverlay } = useSessionBootstrap(me, needsSync, syncing);
-  const segments = useSegments();
-  const router = useRouter();
+  const { replace, segments, navigationReady } = useSafeRouter();
 
   useEffect(() => {
-    if (!isLoaded) return;
+    if (!isLoaded || !navigationReady) return;
     SplashScreen.hideAsync().catch(() => undefined);
+  }, [isLoaded, navigationReady]);
+
+  useEffect(() => {
+    if (!isLoaded || !navigationReady) return;
 
     const inAuthGroup = segments[0] === '(auth)';
     const inAdminGroup = segments[0] === '(admin)';
     const inAppGroup = segments[0] === '(app)';
 
     if (!isSignedIn) {
-      if (!inAuthGroup) router.replace('/(auth)/sign-in');
+      if (!inAuthGroup) replace('/(auth)/sign-in');
       return;
     }
 
@@ -78,33 +83,32 @@ function AuthGate() {
 
     if (me === null) {
       if (segments[0] !== '(auth)' || segments[1] !== 'setup') {
-        router.replace('/(auth)/setup');
+        replace('/(auth)/setup');
       }
       return;
     }
 
     if (me.status !== 'active' || me.role === 'pending') {
       if (segments[0] !== '(auth)' || segments[1] !== 'awaiting-approval') {
-        router.replace('/(auth)/awaiting-approval');
+        replace('/(auth)/awaiting-approval');
       }
       return;
     }
 
     if (me.role === 'admin') {
-      if (!inAdminGroup && !inAppGroup) router.replace('/(admin)/approvals');
+      if (!inAdminGroup && !inAppGroup) replace('/(admin)/approvals');
       return;
     }
     if (me.role === 'surveyor' || me.role === 'supervisor') {
-      if (!inAppGroup) router.replace('/dashboard');
+      if (!inAppGroup) replace('/dashboard');
     }
-  }, [isLoaded, isSignedIn, convexReady, me, needsSync, syncing, segments, router]);
+  }, [isLoaded, navigationReady, isSignedIn, convexReady, me, needsSync, syncing, segments, replace]);
 
   const loadingMessage = useMemo(
     () => signedInLoadingMessage(convexAuthLoading, convexReady, me, needsSync, syncing),
     [convexAuthLoading, convexReady, me, needsSync, syncing],
   );
 
-  // Native splash (solid brand color, no image) stays visible until Clerk is ready.
   if (!isLoaded) {
     return <View className="flex-1 bg-brand" />;
   }
@@ -128,13 +132,16 @@ function AuthGate() {
 /* ────────────────────────── Root ────────────────────────── */
 
 function AppProviders() {
-  const convex = useMemo(
-    () =>
-      new ConvexReactClient(env.convexUrl, {
-        unsavedChangesWarning: false,
-      }),
-    [],
-  );
+  const convex = useMemo(() => {
+    if (!envReady) return null;
+    return new ConvexReactClient(env.convexUrl, {
+      unsavedChangesWarning: false,
+    });
+  }, []);
+
+  if (!convex) {
+    return null;
+  }
 
   return (
     <ClerkProvider publishableKey={env.clerkPublishableKey} tokenCache={tokenCache}>
@@ -154,12 +161,14 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => voi
 
 export default function RootLayout() {
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <ConfigGate>
-          <AppProviders />
-        </ConfigGate>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+    <RootErrorBoundary>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <ConfigGate>
+            <AppProviders />
+          </ConfigGate>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    </RootErrorBoundary>
   );
 }

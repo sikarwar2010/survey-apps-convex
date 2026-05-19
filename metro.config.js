@@ -1,16 +1,24 @@
-const { getDefaultConfig } = require("expo/metro-config");
+const { getDefaultConfig } = require("@expo/metro-config");
+const { withNativeWind } = require("nativewind/metro");
 
-/** @type {import('expo/metro-config').MetroConfig} */
-const config = getDefaultConfig(__dirname);
+const expoConfig = getDefaultConfig(__dirname);
+const expoTransformer = expoConfig.transformer ?? {};
+
+const config = withNativeWind(expoConfig, { input: "./global.css" });
+
+// NativeWind's wrap drops Expo's marker; EAS CLI uses it to detect a valid Metro setup.
+config.transformer = {
+  ...config.transformer,
+  ...("_expoRelativeProjectRoot" in expoTransformer
+    ? { _expoRelativeProjectRoot: expoTransformer._expoRelativeProjectRoot }
+    : {}),
+};
 
 // convex package exports only define "import" and "require", not "react-native".
-// Include those conditions so Metro can resolve subpaths like "convex/react".
 config.resolver.unstable_conditionsByPlatform = {
   ios: ["react-native", "import", "require", "default"],
   android: ["react-native", "import", "require", "default"],
   web: ["browser", "import", "require", "default"],
 };
 
-const { withNativeWind } = require("nativewind/metro");
-
-module.exports = withNativeWind(config, { input: "./global.css" });
+module.exports = config;

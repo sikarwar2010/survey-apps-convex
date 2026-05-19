@@ -13,6 +13,11 @@
     "lint": "expo lint",
     "generate:logo": "node scripts/generate-logo-assets.mjs",
     "lockfile:eas": "node ./scripts/lockfile-eas.mjs",
+    "eas": "eas",
+    "eas:build:android": "eas build --platform android",
+    "eas:build:android:preview": "eas build --platform android --profile preview --non-interactive",
+    "eas:build:android:dev": "eas build --platform android --profile development --non-interactive",
+    "eas:build:android:production": "eas build --platform android --profile production --non-interactive",
     "android": "expo run:android",
     "ios": "expo run:ios"
   },
@@ -27,7 +32,6 @@
     "expo-auth-session": "~7.0.11",
     "expo-constants": "~18.0.13",
     "expo-crypto": "~15.0.9",
-    "expo-dev-client": "~6.0.21",
     "expo-device": "~8.0.10",
     "expo-font": "~14.0.11",
     "expo-haptics": "~15.0.8",
@@ -60,8 +64,10 @@
     "yaml": "2.9.0"
   },
   "devDependencies": {
+    "expo-dev-client": "~6.0.21",
     "@types/react": "~19.1.10",
     "babel-preset-expo": "~54.0.10",
+    "eas-cli": "^18.0.0",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~10.0.0",
     "expo-docs-mcp": "^1.0.0",
