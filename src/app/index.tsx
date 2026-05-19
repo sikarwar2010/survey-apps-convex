@@ -1,6 +1,7 @@
+import { bootScreenStyle } from '@/constants/brand';
 import { View } from 'react-native';
 
-/** AuthGate in root layout handles all routing after startup. */
+/** AuthGate in root layout handles routing after startup. */
 export default function Index() {
-  return <View className="flex-1 bg-brand" />;
+  return <View style={bootScreenStyle} />;
 }

@@ -18,6 +18,7 @@ import { ConfigGate } from '@/components/config-gate';
 import { ConvexAuthError } from '@/components/convex-auth-error';
 import { RootErrorBoundary } from '@/components/root-error-boundary';
 import { env, envReady } from '@/config/env';
+import { bootScreenStyle } from '@/constants/brand';
 import { useAuthForConvex } from '@/hooks/use-auth-for-convex';
 import { useClerkConvexAuth } from '@/hooks/use-clerk-convex-auth';
 import { useSafeRouter } from '@/hooks/use-safe-router';
@@ -30,7 +31,7 @@ import { ConvexProviderWithAuth, ConvexReactClient } from 'convex/react';
 import { Slot } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -110,7 +111,7 @@ function AuthGate() {
   );
 
   if (!isLoaded) {
-    return <View className="flex-1 bg-brand" />;
+    return <View style={bootScreenStyle} />;
   }
 
   if (isSignedIn && convexAuthFailed) {
@@ -132,6 +133,12 @@ function AuthGate() {
 /* ────────────────────────── Root ────────────────────────── */
 
 function AppProviders() {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const convex = useMemo(() => {
     if (!envReady) return null;
     return new ConvexReactClient(env.convexUrl, {
@@ -139,8 +146,8 @@ function AppProviders() {
     });
   }, []);
 
-  if (!convex) {
-    return null;
+  if (!mounted || !convex) {
+    return <View style={bootScreenStyle} />;
   }
 
   return (
