@@ -47,11 +47,13 @@ for (const id of LINUX_OPTIONAL) {
 if (!failed) ok('Linux EAS optional deps present in lockfile');
 
 try {
-  execSync('npm ci --ignore-scripts', { stdio: 'pipe', encoding: 'utf8' });
-  ok('npm ci succeeds (package.json + lockfile in sync)');
+  execSync('npm ci', { stdio: 'pipe', encoding: 'utf8' });
+  ok('npm ci succeeds with postinstall (matches EAS install phase)');
 } catch (err) {
   const out = `${err.stdout ?? ''}${err.stderr ?? ''}`;
-  fail(`npm ci failed — fix lockfile before EAS build:\n${out.slice(-800)}`);
+  fail(
+    `npm ci failed — run npm install, then npm run lockfile:eas if needed:\n${out.slice(-800)}`,
+  );
 }
 
 try {

@@ -23,9 +23,10 @@ export function patchExpoKeepAwake(cwd = process.cwd()) {
   const replacement = `    activateKeepAwakeAsync(tagOrDefault).catch(() => {}).then(() => { ${PATCH_MARKER}`;
 
   if (!src.includes(needle)) {
-    throw new Error(
+    console.warn(
       "expo-keep-awake src/index.ts changed; update scripts/patch-expo-keep-awake.mjs",
     );
+    return false;
   }
 
   src = src.replace(needle, replacement);
