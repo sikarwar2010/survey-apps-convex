@@ -5,7 +5,7 @@
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
 import { draftToSaveDraftPayload, type WizardDraft } from '@/hooks/useWizardDraft';
-import { useMutation } from 'convex/react';
+import { useConvex, useMutation } from 'convex/react';
 import { useCallback, useState } from 'react';
 
 function floorReadyForSync(f: NonNullable<WizardDraft['floors']>[number]): boolean {
@@ -13,9 +13,10 @@ function floorReadyForSync(f: NonNullable<WizardDraft['floors']>[number]): boole
 }
 
 export function useSaveSurveyDraft() {
+  const convex = useConvex();
   const saveDraft = useMutation(api.surveys.saveDraft);
   const upsertFloor = useMutation(api.floors.upsert);
-  const removeOrphanFloors = useMutation(api.floors.removeOrphans);
+  const removeFloor = useMutation(api.floors.remove);
   const linkPhoto = useMutation(api.photos.linkPhoto);
   const [saving, setSaving] = useState(false);
 
@@ -44,7 +45,13 @@ export function useSaveSurveyDraft() {
             areaSqft: f.areaSqft,
           });
         }
-        await removeOrphanFloors({ surveyId, keepClientFloorIds: syncedFloorIds });
+        const keep = new Set(syncedFloorIds);
+        const serverFloors = await convex.query(api.floors.list, { surveyId });
+        for (const row of serverFloors) {
+          if (!keep.has(row.clientFloorId)) {
+            await removeFloor({ id: row._id });
+          }
+        }
 
         for (const photo of draft.photos ?? []) {
           await linkPhoto({
@@ -63,7 +70,7 @@ export function useSaveSurveyDraft() {
         setSaving(false);
       }
     },
-    [saveDraft, upsertFloor, removeOrphanFloors, linkPhoto],
+    [convex, saveDraft, upsertFloor, removeFloor, linkPhoto],
   );
 
   return { save, saving };

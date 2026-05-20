@@ -1,49 +1,74 @@
+import { AppButton } from '@/components';
 import { authStyles } from '@/components/auth/styles';
-import { lastConvexTokenError } from '@/hooks/use-auth-for-convex';
+import { env } from '@/config/env';
+import { lastConvexTokenError, retryConvexAuth } from '@/hooks/use-auth-for-convex';
+import { useClerkConvexAuth } from '@/hooks/use-clerk-convex-auth';
+import { useAuth } from '@clerk/expo';
+import { useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 /**
  * Shown when Clerk is signed in but Convex cannot validate the JWT.
- * Without this, AuthGate spins forever and user rows are never created.
+ * Surveyors on distributed APKs get a retry action; dev details stay in __DEV__.
  */
 export function ConvexAuthError() {
+  const { signOut } = useAuth();
+  const { convexAuthLoading } = useClerkConvexAuth();
+  const [retrying, setRetrying] = useState(false);
+
+  const onRetry = async () => {
+    setRetrying(true);
+    try {
+      retryConvexAuth();
+      await new Promise((r) => setTimeout(r, 2500));
+    } finally {
+      setRetrying(false);
+    }
+  };
+
   return (
     <SafeAreaView style={authStyles.safe}>
       <ScrollView contentContainerStyle={authStyles.scroll}>
-        <Text style={authStyles.title}>Convex + Clerk not linked</Text>
+        <Text style={authStyles.title}>Could not connect your session</Text>
         <Text style={authStyles.subtitle}>
-          Your Clerk session is active, but Convex is not accepting auth tokens. Fix the items below, then restart the
-          app.
+          You are signed in, but the server could not verify your account yet. This is usually temporary — try again, or
+          sign out and sign back in.
         </Text>
 
         {lastConvexTokenError ? (
-          <Text style={[authStyles.subtitle, { marginTop: 12, fontFamily: 'monospace' }]}>{lastConvexTokenError}</Text>
+          <Text style={[authStyles.subtitle, { marginTop: 12 }]}>{lastConvexTokenError}</Text>
         ) : null}
 
-        <View style={{ marginTop: 16, gap: 12 }}>
-          <Step
-            n={1}
-            title="Clerk Convex integration"
-            body='Clerk Dashboard → Integrations → Convex → Activate. This creates the "convex" JWT template automatically.'
+        <View style={{ marginTop: 20, gap: 12 }}>
+          <AppButton
+            label={retrying || convexAuthLoading ? 'Connecting…' : 'Try again'}
+            onPress={() => void onRetry()}
+            loading={retrying || convexAuthLoading}
+            disabled={retrying || convexAuthLoading}
+            fullWidth
           />
-          <Step
-            n={2}
-            title="Or manual JWT template"
-            body='JWT Templates → New → name "convex", Convex preset, audience "convex".'
-          />
-          <Step
-            n={3}
-            title="Convex issuer domain"
-            body="Run: npx convex env set CLERK_JWT_ISSUER_DOMAIN https://YOUR-INSTANCE.clerk.accounts.dev (must match Clerk Frontend API URL)."
-          />
-          <Step
-            n={4}
-            title="Redeploy Convex auth"
-            body="Run npm run deploy (production) or npm run dev (local) so auth.config.ts is deployed."
-          />
-          <Step n={5} title="Restart app" body="Stop Metro, restart the app, then sign out and sign back in." />
+          <AppButton label="Sign out" variant="outline" onPress={() => void signOut()} fullWidth />
         </View>
+
+        {__DEV__ ? (
+          <View style={{ marginTop: 24, gap: 12 }}>
+            <Text style={authStyles.label}>Developer checklist</Text>
+            <Text style={[authStyles.subtitle, { fontFamily: 'monospace' }]}>
+              Convex: {env.convexUrl || '(missing)'}
+            </Text>
+            <Step
+              n={1}
+              title="Clerk Convex integration"
+              body='Clerk Dashboard → Integrations → Convex → Activate (creates the "convex" JWT template).'
+            />
+            <Step
+              n={2}
+              title="Convex issuer on deployment"
+              body="npm run deploy — sets CLERK_JWT_ISSUER_DOMAIN on prod from .env.local."
+            />
+          </View>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );

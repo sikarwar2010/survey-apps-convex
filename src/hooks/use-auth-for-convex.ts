@@ -1,11 +1,18 @@
 import { useAuth } from '@clerk/expo';
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-/** Last getToken failure — shown on ConvexAuthError in dev. */
+/** Last getToken failure — shown on ConvexAuthError. */
 export let lastConvexTokenError: string | null = null;
 
-const RETRY_MS = 600;
-const MAX_ATTEMPTS = 4;
+const RETRY_MS = 800;
+const MAX_ATTEMPTS = 8;
+
+const authRetryListeners = new Set<() => void>();
+
+/** Force ConvexProviderWithAuth to fetch a fresh Clerk `convex` JWT. */
+export function retryConvexAuth() {
+  for (const listener of authRetryListeners) listener();
+}
 
 function formatTokenError(err: unknown): string {
   if (err instanceof Error) return err.message;
@@ -28,34 +35,45 @@ export function useAuthForConvex() {
   const { isLoaded, isSignedIn, getToken } = useAuth();
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
+  const [authEpoch, setAuthEpoch] = useState(0);
 
-  const fetchAccessToken = useCallback(async ({ forceRefreshToken }: { forceRefreshToken: boolean }) => {
-    lastConvexTokenError = null;
+  useEffect(() => {
+    const bump = () => setAuthEpoch((n) => n + 1);
+    authRetryListeners.add(bump);
+    return () => {
+      authRetryListeners.delete(bump);
+    };
+  }, []);
 
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
-      try {
-        const token = await getTokenRef.current({
-          template: 'convex',
-          skipCache: forceRefreshToken,
-        });
-        if (token) return token;
-        lastConvexTokenError =
-          'Clerk returned no token. In Clerk Dashboard → Integrations → enable "Convex", or add a JWT template named "convex".';
-      } catch (err) {
-        lastConvexTokenError = formatTokenError(err);
+  const fetchAccessToken = useCallback(
+    async ({ forceRefreshToken }: { forceRefreshToken: boolean }) => {
+      lastConvexTokenError = null;
+      const refresh = forceRefreshToken || authEpoch > 0;
+
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+        try {
+          const token = await getTokenRef.current({
+            template: 'convex',
+            skipCache: refresh || attempt > 1,
+          });
+          if (token) return token;
+          lastConvexTokenError =
+            'Clerk returned no token. Ask your admin to enable Clerk → Integrations → Convex (creates the "convex" JWT template).';
+        } catch (err) {
+          lastConvexTokenError = formatTokenError(err);
+        }
         if (attempt < MAX_ATTEMPTS) {
           await new Promise((r) => setTimeout(r, RETRY_MS * attempt));
-          continue;
         }
       }
-      break;
-    }
 
-    if (__DEV__ && lastConvexTokenError) {
-      console.warn('[convex-auth]', lastConvexTokenError);
-    }
-    return null;
-  }, []);
+      if (__DEV__ && lastConvexTokenError) {
+        console.warn('[convex-auth]', lastConvexTokenError);
+      }
+      return null;
+    },
+    [authEpoch],
+  );
 
   return useMemo(
     () => ({

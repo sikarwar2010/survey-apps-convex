@@ -8,6 +8,14 @@ import { loadEnvLocal } from "./load-env-local.mjs";
 
 loadEnvLocal();
 
+if (!process.env.CLERK_JWT_ISSUER_DOMAIN?.trim()) {
+  console.error(
+    "[deploy] CLERK_JWT_ISSUER_DOMAIN is missing in .env.local — Convex cannot validate Clerk JWTs.\n" +
+      "  Add: CLERK_JWT_ISSUER_DOMAIN=https://YOUR-INSTANCE.clerk.accounts.dev\n",
+  );
+  process.exit(1);
+}
+
 function syncProdEnv(key) {
   const value = process.env[key];
   if (!value) return;

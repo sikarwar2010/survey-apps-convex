@@ -2,23 +2,22 @@
  * Authentication configuration.
  *
  * Convex validates incoming JWTs against the providers listed here. The
- * mobile app uses `@clerk/clerk-expo` to mint tokens with the
- * `convex` template (configured in the Clerk dashboard); each request to
- * a Convex function carries that JWT, which Convex verifies against
- * Clerk's JWKS endpoint and exposes via `ctx.auth.getUserIdentity()`.
+ * mobile app uses `@clerk/expo` to mint tokens with the `convex` template;
+ * each request carries that JWT, verified against Clerk's JWKS endpoint.
  *
- * Setup:
- *   1. In Clerk dashboard → JWT Templates → create one named `convex`.
- *      Issuer becomes your Clerk instance URL.
- *   2. Set the env var `CLERK_JWT_ISSUER_DOMAIN` in Convex to that issuer.
- *      `npx convex env set CLERK_JWT_ISSUER_DOMAIN https://your-app.clerk.accounts.dev`
- *   3. Done — no shared secret, no manual key rotation.
+ * Prefer `CLERK_JWT_ISSUER_DOMAIN` on the deployment (`npm run deploy` syncs
+ * it from `.env.local`). The fallback keeps auth working if the env var was
+ * never set on a deployment (common cause of "Convex + Clerk not linked").
  */
+import { CLERK_JWT_ISSUER_FALLBACK } from './clerk';
+
+const clerkIssuer = process.env.CLERK_JWT_ISSUER_DOMAIN?.trim() || CLERK_JWT_ISSUER_FALLBACK;
+
 export default {
   providers: [
     {
-      domain: process.env.CLERK_JWT_ISSUER_DOMAIN,
-      applicationID: "convex",
+      domain: clerkIssuer,
+      applicationID: 'convex',
     },
   ],
 };
