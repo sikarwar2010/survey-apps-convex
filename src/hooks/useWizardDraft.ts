@@ -20,6 +20,7 @@
  *   - useWizardDraft(id) → loads the draft for `localId`, exposes update + reset
  *   - clearDraft(id)     → drops the entry from AsyncStorage after successful submit
  */
+import { isAcceptedOwnerMobile, isRespondentOwner, primaryOwnerMobileFromOwners } from '@/convex/ownerMobile';
 import { plinthSqftFromFloors } from '@/utils/area';
 import { isValidIndianMobile } from '@/utils/format';
 import { coerceSanitationType, coerceWaterSource, servicesStepComplete } from '@/utils/services';
@@ -559,23 +560,24 @@ export function draftToUpsertArgs(d: WizardDraft) {
 }
 
 function primaryOwnerMobileFromDraft(d: WizardDraft): string | undefined {
-  if (!d.owners?.length) return undefined;
-  for (const o of d.owners) {
-    const m = o.mobileNo?.trim();
-    if (m && isValidIndianMobile(m)) return m;
-  }
-  return undefined;
+  return primaryOwnerMobileFromOwners(d.owners, d.relationship);
 }
 
-/** Owner step: first owner mobile required; other rows validated when filled. */
+/** Owner step: mobile required; valid Indian when respondent is owner, else 0000000000 allowed. */
 export function ownerStepComplete(d: WizardDraft): boolean {
   const owners = d.owners ?? [];
   if (!owners.length) return false;
-  const primary = owners[0]?.mobileNo?.trim();
-  if (!primary || !isValidIndianMobile(primary)) return false;
+  const relationship = d.relationship?.trim();
+  const primary = owners[0]?.mobileNo?.trim() ?? '';
+  if (!primary) return false;
+  if (isRespondentOwner(relationship)) {
+    if (!isValidIndianMobile(primary)) return false;
+  } else if (!isAcceptedOwnerMobile(primary, relationship)) {
+    return false;
+  }
   for (const o of owners) {
     const mobile = o.mobileNo?.trim();
-    if (mobile && !isValidIndianMobile(mobile)) return false;
+    if (mobile && !isAcceptedOwnerMobile(mobile, relationship)) return false;
     const alt = o.altMobileNo?.trim();
     if (alt) {
       if (!isValidIndianMobile(alt)) return false;

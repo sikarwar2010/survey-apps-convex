@@ -695,12 +695,13 @@ function normalizeOwnerFields<
     return t ? t : undefined;
   };
   const owners = normalizeOwners(args.owners as Parameters<typeof normalizeOwners>[0]);
-  const mobileNo = primaryOwnerMobile(owners) ?? trimOpt(args.mobileNo as string | undefined) ?? '';
+  const relationship = trimOpt(args.relationship as string | undefined);
+  const mobileNo = primaryOwnerMobile(owners, relationship) ?? trimOpt(args.mobileNo as string | undefined) ?? '';
   const altMobileNo = owners?.[0]?.altMobileNo ?? trimOpt(args.altMobileNo as string | undefined);
   return {
     ...args,
     respondentName: trimOpt(args.respondentName as string | undefined),
-    relationship: trimOpt(args.relationship as string | undefined),
+    relationship,
     owners,
     mobileNo,
     altMobileNo,
