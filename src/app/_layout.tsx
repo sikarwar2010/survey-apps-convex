@@ -5,7 +5,7 @@ import 'react-native-gesture-handler';
  *
  * Order of providers (outside → in):
  *   ClerkProvider                     → owns sign-in/sign-up state + tokens
- *   ConvexProviderWithAuth           → injects Clerk `convex` JWTs into every Convex call
+ *   ConvexProviderWithAuth           → Clerk session / `convex` JWT bridge (see useAuthForConvex)
  *   ThemeProvider                     → app design tokens
  *
  * AuthGate handles three states:
@@ -34,8 +34,8 @@ import { Slot } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useState } from 'react';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import '../../global.css';
 
