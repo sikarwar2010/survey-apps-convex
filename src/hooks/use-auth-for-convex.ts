@@ -1,3 +1,4 @@
+import { sessionClaimsHaveConvexAud, tokenHasConvexAud } from '@/utils/jwt';
 import { useAuth } from '@clerk/expo';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -24,30 +25,27 @@ function formatTokenError(err: unknown): string {
   }
 }
 
-function sessionHasConvexAud(claims: Record<string, unknown> | null | undefined): boolean {
-  return claims?.aud === 'convex';
+function isClerkOfflineError(err: unknown): boolean {
+  const msg = formatTokenError(err).toLowerCase();
+  return msg.includes('clerk_offline') || msg.includes('offline');
 }
 
 /**
  * Clerk → Convex auth bridge for `ConvexProviderWithAuth`.
  *
- * Matches `ConvexProviderWithClerk` token logic: when Clerk's Convex integration is
- * active, the session JWT already has `aud: "convex"` — use cached `getToken()` (no
- * template network call). Otherwise request the `convex` JWT template.
- *
- * Always calling `getToken({ template: "convex" })` causes `clerk_offline` on React
- * Native and leaves every user stuck on "Securing your session…".
+ * On React Native, `getToken({ template: "convex" })` often fails with `clerk_offline`
+ * even when the cached session JWT already has `aud: "convex"` (Clerk → Convex integration).
+ * Always read the session token first and inspect its `aud` claim before minting a template.
  *
  * `getToken` from Clerk Expo is not referentially stable — keep it in a ref so
  * Convex does not call setAuth on every render (causes "Securing your session" loops).
  */
 export function useAuthForConvex() {
-  const { isLoaded, isSignedIn, getToken, sessionClaims, orgId, orgRole } = useAuth();
+  const { isLoaded, isSignedIn, getToken, sessionClaims } = useAuth();
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
-  const sessionClaimsRef = useRef(sessionClaims);
-  sessionClaimsRef.current = sessionClaims;
   const [authEpoch, setAuthEpoch] = useState(0);
+  const hadConvexAudRef = useRef(false);
 
   useEffect(() => {
     const bump = () => setAuthEpoch((n) => n + 1);
@@ -57,34 +55,62 @@ export function useAuthForConvex() {
     };
   }, []);
 
+  useEffect(() => {
+    const hasConvexAud = sessionClaimsHaveConvexAud(sessionClaims);
+    if (hasConvexAud && !hadConvexAudRef.current) {
+      hadConvexAudRef.current = true;
+      setAuthEpoch((n) => n + 1);
+    }
+    if (!hasConvexAud) {
+      hadConvexAudRef.current = false;
+    }
+  }, [sessionClaims]);
+
   const fetchAccessToken = useCallback(
     async ({ forceRefreshToken }: { forceRefreshToken: boolean }) => {
       lastConvexTokenError = null;
       const refresh = forceRefreshToken || authEpoch > 0;
-      const useCachedConvexJwt = sessionHasConvexAud(sessionClaimsRef.current);
 
       for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
         const skipCache = refresh || attempt > 1;
+
         try {
-          const token = useCachedConvexJwt
-            ? await getTokenRef.current({ skipCache })
-            : await getTokenRef.current({ template: 'convex', skipCache });
-          if (token) return token;
-          lastConvexTokenError = useCachedConvexJwt
-            ? 'Clerk returned no session token. Sign out and sign in again.'
-            : 'Clerk returned no token. Ask your admin to enable Clerk → Integrations → Convex (creates the "convex" JWT template).';
+          const sessionToken = await getTokenRef.current({ skipCache });
+          if (sessionToken && tokenHasConvexAud(sessionToken)) {
+            return sessionToken;
+          }
+
+          try {
+            const templateToken = await getTokenRef.current({
+              template: 'convex',
+              skipCache,
+            });
+            if (templateToken) return templateToken;
+          } catch (templateErr) {
+            lastConvexTokenError = formatTokenError(templateErr);
+            if (sessionToken && tokenHasConvexAud(sessionToken)) {
+              return sessionToken;
+            }
+          }
+
+          if (!sessionToken) {
+            lastConvexTokenError = 'Clerk returned no session token. Sign out and sign in again.';
+          } else {
+            lastConvexTokenError =
+              'Clerk session is missing Convex audience (aud: convex). In Clerk Dashboard → Integrations → Convex → Activate.';
+          }
         } catch (err) {
           lastConvexTokenError = formatTokenError(err);
-          // Template mint can fail offline on RN while the session JWT is valid.
-          if (!useCachedConvexJwt) {
+          if (isClerkOfflineError(err)) {
             try {
               const fallback = await getTokenRef.current({ skipCache: true });
-              if (fallback) return fallback;
+              if (fallback && tokenHasConvexAud(fallback)) return fallback;
             } catch (fallbackErr) {
               lastConvexTokenError = formatTokenError(fallbackErr);
             }
           }
         }
+
         if (attempt < MAX_ATTEMPTS) {
           await new Promise((r) => setTimeout(r, RETRY_MS * attempt));
         }
@@ -95,7 +121,7 @@ export function useAuthForConvex() {
       }
       return null;
     },
-    [authEpoch, orgId, orgRole],
+    [authEpoch],
   );
 
   return useMemo(
