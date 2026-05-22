@@ -1,0 +1,3 @@
+# AI agent skills (local .claude/skills may be symlinks into .agents on Windows)
+.agents/
+.claude/
