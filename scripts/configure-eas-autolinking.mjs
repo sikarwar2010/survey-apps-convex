@@ -1,6 +1,6 @@
 /**
- * EAS prebuild hook: preview/production must not autolink expo-dev-client
- * (Play Protect flags dev-launcher APKs; app crashes without Metro).
+ * Writes expo.autolinking.exclude into package.json before install/prebuild.
+ * Run via package.json `eas-build-pre-install` (not eas.json prebuildCommand — that runs as `expo …`).
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 

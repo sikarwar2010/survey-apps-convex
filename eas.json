@@ -7,7 +7,6 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "prebuildCommand": "node ./scripts/configure-eas-autolinking.mjs",
       "env": {
         "EXPO_USE_DEV_CLIENT": "1"
       },
@@ -18,7 +17,6 @@
     "production": {
       "developmentClient": false,
       "environment": "production",
-      "prebuildCommand": "node ./scripts/configure-eas-autolinking.mjs",
       "env": {
         "EXCLUDE_DEV_CLIENT": "1"
       },
@@ -30,7 +28,6 @@
       "developmentClient": false,
       "environment": "preview",
       "distribution": "internal",
-      "prebuildCommand": "node ./scripts/configure-eas-autolinking.mjs",
       "env": {
         "EXCLUDE_DEV_CLIENT": "1"
       },

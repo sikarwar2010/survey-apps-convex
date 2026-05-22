@@ -19,6 +19,7 @@
     "eas:build:android:preview": "npm run verify:eas-preview && eas build --platform android --profile preview --non-interactive",
     "eas:build:android:dev": "eas build --platform android --profile development --non-interactive",
     "eas:build:android:production": "npm run verify:eas-preview && eas build --platform android --profile production --non-interactive",
+    "eas-build-pre-install": "node ./scripts/configure-eas-autolinking.mjs",
     "android": "expo run:android",
     "ios": "expo run:ios"
   },
