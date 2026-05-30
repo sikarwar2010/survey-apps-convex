@@ -9,13 +9,7 @@
  */
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import {
-  assertCanReadWard,
-  clientError,
-  requireRole,
-  requireUser,
-  writeAudit,
-} from "./helpers";
+import { assertCanReadWard, clientError, requireRole, requireUser, writeAudit } from "./helpers";
 
 export const listRemarks = query({
   args: { surveyId: v.id("surveys") },
@@ -180,8 +174,9 @@ export const decide = mutation({
       userId: survey.surveyorId,
       type: args.decision === "approve" ? "qc_approved" : "qc_rejected",
       title: args.decision === "approve" ? "Survey approved" : "Survey returned for revision",
-      body: args.comment?.slice(0, 120)
-        ?? (args.decision === "approve"
+      body:
+        args.comment?.slice(0, 120) ??
+        (args.decision === "approve"
           ? "Your survey has been approved."
           : "Open the survey to see what needs revising."),
       relatedEntity: "survey",

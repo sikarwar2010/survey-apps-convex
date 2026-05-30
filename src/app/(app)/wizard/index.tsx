@@ -18,7 +18,7 @@ export default function WizardEntry() {
   const router = useRouter();
   const params = useLocalSearchParams<{ resume?: string; localId?: string; surveyId?: string }>();
   const surveyId = params.surveyId as Id<'surveys'> | undefined;
-  const survey = useQuery(api.surveys.get, surveyId ? { id: surveyId } : 'skip');
+  const survey = useQuery(api.survey.get, surveyId ? { id: surveyId } : 'skip');
   const started = useRef(false);
 
   useEffect(() => {

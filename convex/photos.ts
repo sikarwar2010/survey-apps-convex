@@ -9,17 +9,17 @@
  * Convex garbage-collects orphaned blobs lazily; we delete proactively
  * to avoid stale references.
  */
-import { v } from 'convex/values';
-import { mutation, query } from './_generated/server';
-import { assertCanReadWard, clientError, requireUser, writeAudit } from './helpers';
-import { photoSlot } from './schema';
+import { v } from "convex/values";
+import { mutation, query } from "./_generated/server";
+import { assertCanReadWard, clientError, requireUser, writeAudit } from "./helpers";
+import { photoSlot } from "./schema";
 
 /** Returns a one-time upload URL. Valid for ~1 hour by Convex defaults. */
 export const generateUploadUrl = mutation({
   args: {},
   handler: async (ctx) => {
     const me = await requireUser(ctx);
-    if (me.role === 'pending') clientError('FORBIDDEN', 'Not allowed');
+    if (me.role === "pending") clientError("FORBIDDEN", "Not allowed");
     return await ctx.storage.generateUploadUrl();
   },
 });
@@ -33,9 +33,9 @@ export const generateUploadUrl = mutation({
  */
 export const linkPhoto = mutation({
   args: {
-    surveyId: v.id('surveys'),
+    surveyId: v.id("surveys"),
     slot: photoSlot,
-    storageId: v.id('_storage'),
+    storageId: v.id("_storage"),
     sizeKb: v.number(),
     width: v.optional(v.number()),
     height: v.optional(v.number()),
@@ -46,23 +46,23 @@ export const linkPhoto = mutation({
     const survey = await ctx.db.get(args.surveyId);
     if (!survey) {
       await ctx.storage.delete(args.storageId);
-      clientError('NOT_FOUND', 'Survey not found');
+      clientError("NOT_FOUND", "Survey not found");
     }
     assertCanReadWard(me, survey.municipalityId, survey.wardNo);
-    if (survey.qcStatus === 'approved' && me.role === 'surveyor') {
+    if (survey.qcStatus === "approved" && me.role === "surveyor") {
       await ctx.storage.delete(args.storageId);
-      clientError('LOCKED', 'Survey is locked');
+      clientError("LOCKED", "Survey is locked");
     }
     if (args.sizeKb <= 0 || args.sizeKb > 1024) {
       await ctx.storage.delete(args.storageId);
-      clientError('VALIDATION', 'Photo size out of range (≤ 1 MB)');
+      clientError("VALIDATION", "Photo size out of range (≤ 1 MB)");
     }
 
     // Replace existing photo in the same slot (one slot = one photo).
     // If the blob is unchanged (save draft / submit re-sync), keep storage intact.
     const existing = await ctx.db
-      .query('photos')
-      .withIndex('by_survey_slot', (q) => q.eq('surveyId', args.surveyId).eq('slot', args.slot))
+      .query("photos")
+      .withIndex("by_survey_slot", (q) => q.eq("surveyId", args.surveyId).eq("slot", args.slot))
       .unique();
     if (existing) {
       if (existing.storageId === args.storageId) {
@@ -72,7 +72,7 @@ export const linkPhoto = mutation({
       await ctx.db.delete(existing._id);
     }
 
-    const id = await ctx.db.insert('photos', {
+    const id = await ctx.db.insert("photos", {
       surveyId: args.surveyId,
       slot: args.slot,
       storageId: args.storageId,
@@ -85,8 +85,8 @@ export const linkPhoto = mutation({
 
     await writeAudit(ctx, {
       actorId: me._id,
-      action: 'photo.uploaded',
-      entity: 'survey',
+      action: "photo.uploaded",
+      entity: "survey",
       entityId: args.surveyId,
       metadata: { slot: args.slot, sizeKb: args.sizeKb },
     });
@@ -96,10 +96,10 @@ export const linkPhoto = mutation({
 
 /** Signed preview URLs for wizard/review (storage ids from the caller's uploads). */
 export const resolveStorageUrls = query({
-  args: { storageIds: v.array(v.id('_storage')) },
+  args: { storageIds: v.array(v.id("_storage")) },
   handler: async (ctx, args) => {
     const me = await requireUser(ctx);
-    if (me.role === 'pending') return [];
+    if (me.role === "pending") return [];
 
     const unique = [...new Set(args.storageIds)];
     const out: Array<{ storageId: (typeof unique)[number]; url: string | null }> = [];
@@ -115,14 +115,14 @@ export const resolveStorageUrls = query({
  * Used when the surveyor deletes or replaces a photo on review.
  */
 export const releaseStorage = mutation({
-  args: { storageId: v.id('_storage') },
+  args: { storageId: v.id("_storage") },
   handler: async (ctx, args) => {
     const me = await requireUser(ctx);
-    if (me.role === 'pending') clientError('FORBIDDEN', 'Not allowed');
+    if (me.role === "pending") clientError("FORBIDDEN", "Not allowed");
 
     const rows = await ctx.db
-      .query('photos')
-      .filter((q) => q.eq(q.field('storageId'), args.storageId))
+      .query("photos")
+      .filter((q) => q.eq(q.field("storageId"), args.storageId))
       .collect();
 
     for (const row of rows) {
@@ -132,8 +132,8 @@ export const releaseStorage = mutation({
         continue;
       }
       assertCanReadWard(me, survey.municipalityId, survey.wardNo);
-      if (survey.qcStatus === 'approved' && me.role === 'surveyor') {
-        clientError('LOCKED', 'Survey is locked');
+      if (survey.qcStatus === "approved" && me.role === "surveyor") {
+        clientError("LOCKED", "Survey is locked");
       }
       await ctx.db.delete(row._id);
     }
@@ -146,8 +146,8 @@ export const releaseStorage = mutation({
 
     await writeAudit(ctx, {
       actorId: me._id,
-      action: 'photo.released',
-      entity: 'storage',
+      action: "photo.released",
+      entity: "storage",
       entityId: args.storageId,
     });
   },
@@ -155,7 +155,7 @@ export const releaseStorage = mutation({
 
 export const removeBySurveySlot = mutation({
   args: {
-    surveyId: v.id('surveys'),
+    surveyId: v.id("surveys"),
     slot: photoSlot,
   },
   handler: async (ctx, args) => {
@@ -163,13 +163,13 @@ export const removeBySurveySlot = mutation({
     const survey = await ctx.db.get(args.surveyId);
     if (!survey) return;
     assertCanReadWard(me, survey.municipalityId, survey.wardNo);
-    if (survey.qcStatus === 'approved' && me.role === 'surveyor') {
-      clientError('LOCKED', 'Survey is locked');
+    if (survey.qcStatus === "approved" && me.role === "surveyor") {
+      clientError("LOCKED", "Survey is locked");
     }
 
     const existing = await ctx.db
-      .query('photos')
-      .withIndex('by_survey_slot', (q) => q.eq('surveyId', args.surveyId).eq('slot', args.slot))
+      .query("photos")
+      .withIndex("by_survey_slot", (q) => q.eq("surveyId", args.surveyId).eq("slot", args.slot))
       .unique();
     if (!existing) return;
 
@@ -177,8 +177,8 @@ export const removeBySurveySlot = mutation({
     await ctx.db.delete(existing._id);
     await writeAudit(ctx, {
       actorId: me._id,
-      action: 'photo.removed',
-      entity: 'survey',
+      action: "photo.removed",
+      entity: "survey",
       entityId: args.surveyId,
       metadata: { slot: args.slot },
     });
@@ -186,7 +186,7 @@ export const removeBySurveySlot = mutation({
 });
 
 export const list = query({
-  args: { surveyId: v.id('surveys') },
+  args: { surveyId: v.id("surveys") },
   handler: async (ctx, args) => {
     const me = await requireUser(ctx);
     const survey = await ctx.db.get(args.surveyId);
@@ -194,8 +194,8 @@ export const list = query({
     assertCanReadWard(me, survey.municipalityId, survey.wardNo);
 
     const rows = await ctx.db
-      .query('photos')
-      .withIndex('by_survey', (q) => q.eq('surveyId', args.surveyId))
+      .query("photos")
+      .withIndex("by_survey", (q) => q.eq("surveyId", args.surveyId))
       .collect();
     return await Promise.all(
       rows.map(async (p) => ({
@@ -207,7 +207,7 @@ export const list = query({
 });
 
 export const remove = mutation({
-  args: { id: v.id('photos') },
+  args: { id: v.id("photos") },
   handler: async (ctx, args) => {
     const me = await requireUser(ctx);
     const photo = await ctx.db.get(args.id);
@@ -215,8 +215,8 @@ export const remove = mutation({
     const survey = await ctx.db.get(photo.surveyId);
     if (!survey) return;
     assertCanReadWard(me, survey.municipalityId, survey.wardNo);
-    if (survey.qcStatus === 'approved' && me.role === 'surveyor') {
-      clientError('LOCKED', 'Survey is locked');
+    if (survey.qcStatus === "approved" && me.role === "surveyor") {
+      clientError("LOCKED", "Survey is locked");
     }
     await ctx.storage.delete(photo.storageId);
     await ctx.db.delete(args.id);

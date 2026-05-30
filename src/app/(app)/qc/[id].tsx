@@ -18,7 +18,7 @@ export default function QcConversationScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
   const surveyId = params.id as Id<'surveys'> | undefined;
 
-  const survey = useQuery(api.surveys.get, surveyId ? { id: surveyId } : 'skip');
+  const survey = useQuery(api.survey.get, surveyId ? { id: surveyId } : 'skip');
   const remarks = useQuery(api.qc.listRemarks, surveyId ? { surveyId } : 'skip');
   const addRemark = useMutation(api.qc.addRemark);
   const resolveRemark = useMutation(api.qc.resolveRemark);

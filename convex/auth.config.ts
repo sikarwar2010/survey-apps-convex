@@ -9,15 +9,14 @@
  * it from `.env.local`). The fallback keeps auth working if the env var was
  * never set on a deployment (common cause of "Convex + Clerk not linked").
  */
-import { CLERK_JWT_ISSUER_FALLBACK } from './clerk';
 
-const clerkIssuer = process.env.CLERK_JWT_ISSUER_DOMAIN?.trim() || CLERK_JWT_ISSUER_FALLBACK;
+import { CLERK_JWT_ISSUER_DOMAIN } from "./clerk";
 
 export default {
   providers: [
     {
-      domain: clerkIssuer,
-      applicationID: 'convex',
+      domain: CLERK_JWT_ISSUER_DOMAIN,
+      applicationID: "convex",
     },
   ],
 };

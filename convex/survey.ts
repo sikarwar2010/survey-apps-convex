@@ -7,25 +7,25 @@
  * creating a new one — this is how the mobile's draft-then-sync flow stays
  * safe across retries.
  */
-import { ConvexError, v } from 'convex/values';
-import type { Doc, Id } from './_generated/dataModel';
-import { mutation, query } from './_generated/server';
-import { addressTenantContext, normalizeAddressFields, validateAddressSection } from './addressRules';
-import { presentFloorRow, validateAreaSection } from './areaMasters';
-import { GPS_ACCEPT_MAX_ACCURACY_METERS, GPS_TARGET_ACCURACY_METERS } from './gpsAccuracy';
-import { assertCanReadWard, clientError, requireRole, requireUser, writeAudit } from './helpers';
-import { isValidIndianOwnerMobile, normalizeOwners, primaryOwnerMobile, validateOwnerSection } from './ownerRules';
-import { gpsCapture, qcStatus, sanitationType, surveyOwnerEntry, surveyStatus, waterSource } from './schema';
-import { validateServicesSection } from './serviceMasters';
-import { validateTaxationSection } from './taxationMasters';
-import { assertMunicipalityInScope, resolveTenantScope, tenantDistrictIds, tenantMunicipalityIds } from './tenancy';
+import { ConvexError, v } from "convex/values";
+import type { Doc, Id } from "./_generated/dataModel";
+import { mutation, query } from "./_generated/server";
+import { addressTenantContext, normalizeAddressFields, validateAddressSection } from "./addressRules";
+import { presentFloorRow, validateAreaSection } from "./areaMasters";
+import { GPS_ACCEPT_MAX_ACCURACY_METERS, GPS_TARGET_ACCURACY_METERS } from "./gpsAccuracy";
+import { assertCanReadWard, clientError, requireRole, requireUser, writeAudit } from "./helpers";
+import { isValidIndianOwnerMobile, normalizeOwners, primaryOwnerMobile, validateOwnerSection } from "./ownerRules";
+import { gpsCapture, qcStatus, sanitationType, surveyOwnerEntry, surveyStatus, waterSource } from "./schema";
+import { validateServicesSection } from "./serviceMasters";
+import { validateTaxationSection } from "./taxationMasters";
+import { assertMunicipalityInScope, resolveTenantScope, tenantDistrictIds, tenantMunicipalityIds } from "./tenancy";
 
 /* ────────────────────────── shared input validator ────────────────────────── */
 
 /** Partial payload for in-progress saves — only `localId` + `municipalityId` are required. */
 const draftSurveyInput = {
   localId: v.string(),
-  municipalityId: v.id('municipalities'),
+  municipalityId: v.id("municipalities"),
   clientUpdatedAt: v.number(),
   wardNo: v.optional(v.string()),
   sectorNo: v.optional(v.string()),
@@ -66,7 +66,7 @@ const draftSurveyInput = {
 
 const surveyInput = {
   localId: v.string(),
-  municipalityId: v.id('municipalities'),
+  municipalityId: v.id("municipalities"),
   wardNo: v.string(),
 
   sectorNo: v.optional(v.string()),
@@ -124,9 +124,9 @@ export const list = query({
     status: v.optional(surveyStatus),
     qcStatus: v.optional(qcStatus),
     wardNo: v.optional(v.string()),
-    districtId: v.optional(v.id('districts')),
-    municipalityId: v.optional(v.id('municipalities')),
-    surveyorId: v.optional(v.id('users')),
+    districtId: v.optional(v.id("districts")),
+    municipalityId: v.optional(v.id("municipalities")),
+    surveyorId: v.optional(v.id("users")),
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
@@ -142,73 +142,73 @@ export const list = query({
     if (args.municipalityId) {
       await assertMunicipalityInScope(ctx, me, args.municipalityId);
     }
-    if (args.districtId && me.role !== 'admin' && !districtIds.has(args.districtId)) {
-      clientError('FORBIDDEN', 'This district is outside your assigned scope');
+    if (args.districtId && me.role !== "admin" && !districtIds.has(args.districtId)) {
+      clientError("FORBIDDEN", "This district is outside your assigned scope");
     }
 
-    let rows: Doc<'surveys'>[];
-    if (me.role === 'surveyor') {
+    let rows: Doc<"surveys">[];
+    if (me.role === "surveyor") {
       rows = await ctx.db
-        .query('surveys')
-        .withIndex('by_surveyor', (q) => q.eq('surveyorId', me._id))
-        .order('desc')
+        .query("surveys")
+        .withIndex("by_surveyor", (q) => q.eq("surveyorId", me._id))
+        .order("desc")
         .take(limit * 2);
       rows = rows.filter((r) => !r.districtId || districtIds.has(r.districtId)).slice(0, limit);
-    } else if (me.role === 'supervisor') {
+    } else if (me.role === "supervisor") {
       const districtKey = args.districtId ?? (scope.districts.length === 1 ? scope.districts[0]!._id : undefined);
       const muniKey = args.municipalityId ?? me.municipalityId;
 
       if (muniKey) {
         rows = await ctx.db
-          .query('surveys')
-          .withIndex('by_municipality_status', (q) =>
-            args.status ? q.eq('municipalityId', muniKey).eq('status', args.status) : q.eq('municipalityId', muniKey),
+          .query("surveys")
+          .withIndex("by_municipality_status", (q) =>
+            args.status ? q.eq("municipalityId", muniKey).eq("status", args.status) : q.eq("municipalityId", muniKey),
           )
-          .order('desc')
+          .order("desc")
           .take(limit * 2);
       } else if (districtKey) {
         rows = await ctx.db
-          .query('surveys')
-          .withIndex('by_district_status', (q) =>
-            args.status ? q.eq('districtId', districtKey).eq('status', args.status) : q.eq('districtId', districtKey),
+          .query("surveys")
+          .withIndex("by_district_status", (q) =>
+            args.status ? q.eq("districtId", districtKey).eq("status", args.status) : q.eq("districtId", districtKey),
           )
-          .order('desc')
+          .order("desc")
           .take(limit * 2);
       } else {
         return [];
       }
       rows = rows.slice(0, limit);
-    } else if (me.role === 'admin') {
+    } else if (me.role === "admin") {
       if (args.municipalityId) {
         rows = await ctx.db
-          .query('surveys')
-          .withIndex('by_municipality_status', (q) =>
+          .query("surveys")
+          .withIndex("by_municipality_status", (q) =>
             args.status
-              ? q.eq('municipalityId', args.municipalityId!).eq('status', args.status)
-              : q.eq('municipalityId', args.municipalityId!),
+              ? q.eq("municipalityId", args.municipalityId!).eq("status", args.status)
+              : q.eq("municipalityId", args.municipalityId!),
           )
-          .order('desc')
+          .order("desc")
           .take(limit * 2);
       } else if (args.districtId) {
         rows = await ctx.db
-          .query('surveys')
-          .withIndex('by_district_status', (q) =>
+          .query("surveys")
+          .withIndex("by_district_status", (q) =>
             args.status
-              ? q.eq('districtId', args.districtId!).eq('status', args.status)
-              : q.eq('districtId', args.districtId!),
+              ? q.eq("districtId", args.districtId!).eq("status", args.status)
+              : q.eq("districtId", args.districtId!),
           )
-          .order('desc')
+          .order("desc")
           .take(limit * 2);
       } else if (args.surveyorId) {
         rows = await ctx.db
-          .query('surveys')
-          .withIndex('by_surveyor', (q) => q.eq('surveyorId', args.surveyorId!))
-          .order('desc')
+          .query("surveys")
+          .withIndex("by_surveyor", (q) => q.eq("surveyorId", args.surveyorId!))
+          .order("desc")
           .take(limit * 2);
       } else {
         rows = await ctx.db
-          .query('surveys')
-          .order('desc')
+          .query("surveys")
+          .order("desc")
           .take(limit * 2);
       }
       rows = rows.slice(0, limit);
@@ -228,7 +228,7 @@ export const list = query({
     if (args.surveyorId) {
       rows = rows.filter((r) => r.surveyorId === args.surveyorId);
     }
-    if (args.status && me.role !== 'supervisor') {
+    if (args.status && me.role !== "supervisor") {
       rows = rows.filter((r) => r.status === args.status);
     }
     if (args.qcStatus) {
@@ -243,7 +243,7 @@ export const list = query({
 
 /** Single survey with floors + photos + QC remarks hydrated for the detail screen. */
 export const get = query({
-  args: { id: v.id('surveys') },
+  args: { id: v.id("surveys") },
   handler: async (ctx, args) => {
     const me = await requireUser(ctx);
     const survey = await ctx.db.get(args.id);
@@ -253,18 +253,18 @@ export const get = query({
 
     const [floors, photos, qcRemarks, surveyor] = await Promise.all([
       ctx.db
-        .query('floors')
-        .withIndex('by_survey', (q) => q.eq('surveyId', args.id))
+        .query("floors")
+        .withIndex("by_survey", (q) => q.eq("surveyId", args.id))
         .collect()
         .then((rows) => rows.sort((a, b) => a.position - b.position).map(presentFloorRow)),
       ctx.db
-        .query('photos')
-        .withIndex('by_survey', (q) => q.eq('surveyId', args.id))
+        .query("photos")
+        .withIndex("by_survey", (q) => q.eq("surveyId", args.id))
         .collect(),
       ctx.db
-        .query('qcRemarks')
-        .withIndex('by_survey', (q) => q.eq('surveyId', args.id))
-        .order('desc')
+        .query("qcRemarks")
+        .withIndex("by_survey", (q) => q.eq("surveyId", args.id))
+        .order("desc")
         .collect(),
       ctx.db.get(survey.surveyorId),
     ]);
@@ -295,8 +295,8 @@ export const getByLocalId = query({
   handler: async (ctx, args) => {
     const me = await requireUser(ctx);
     return await ctx.db
-      .query('surveys')
-      .withIndex('by_surveyor_localId', (q) => q.eq('surveyorId', me._id).eq('localId', args.localId))
+      .query("surveys")
+      .withIndex("by_surveyor_localId", (q) => q.eq("surveyorId", me._id).eq("localId", args.localId))
       .unique();
   },
 });
@@ -304,27 +304,27 @@ export const getByLocalId = query({
 /* ────────────────────────── mutations ────────────────────────── */
 
 const DRAFT_SURVEY_DEFAULTS = {
-  wardNo: '',
-  parcelNo: '',
-  unitNo: '',
-  mobileNo: '',
-  locality: '',
-  colonyName: '',
-  city: '',
-  pinCode: '',
-  assessmentYear: '',
-  ownershipType: '',
-  propertyType: '',
-  propertyUse: '',
-  situation: '',
-  roadType: '',
-  taxRateZone: '',
+  wardNo: "",
+  parcelNo: "",
+  unitNo: "",
+  mobileNo: "",
+  locality: "",
+  colonyName: "",
+  city: "",
+  pinCode: "",
+  assessmentYear: "",
+  ownershipType: "",
+  propertyType: "",
+  propertyUse: "",
+  situation: "",
+  roadType: "",
+  taxRateZone: "",
   plotSqft: 0,
   plinthSqft: 0,
   isSlum: false,
   municipalWaterConnection: false,
-  waterSource: 'government_tap' as const,
-  sanitationType: 'sewer_system' as const,
+  waterSource: "government_tap" as const,
+  sanitationType: "sewer_system" as const,
   municipalWasteCollection: false,
 };
 
@@ -337,26 +337,26 @@ export const saveDraft = mutation({
   args: draftSurveyInput,
   handler: async (ctx, args) => {
     const me = await requireUser(ctx);
-    requireRole(me, 'surveyor', 'supervisor', 'admin');
+    requireRole(me, "surveyor", "supervisor", "admin");
     const muni = await assertMunicipalityInScope(ctx, me, args.municipalityId);
 
     const existing = await ctx.db
-      .query('surveys')
-      .withIndex('by_surveyor_localId', (q) => q.eq('surveyorId', me._id).eq('localId', args.localId))
+      .query("surveys")
+      .withIndex("by_surveyor_localId", (q) => q.eq("surveyorId", me._id).eq("localId", args.localId))
       .unique();
 
-    if (existing?.qcStatus === 'approved' && me.role === 'surveyor') {
-      clientError('LOCKED', 'This survey is locked — request your supervisor to re-open it');
+    if (existing?.qcStatus === "approved" && me.role === "surveyor") {
+      clientError("LOCKED", "This survey is locked — request your supervisor to re-open it");
     }
 
-    const wardNo = args.wardNo?.trim() ?? existing?.wardNo ?? '';
+    const wardNo = args.wardNo?.trim() ?? existing?.wardNo ?? "";
     if (wardNo) {
       assertCanReadWard(me, args.municipalityId, wardNo);
       const ward = await ctx.db
-        .query('wards')
-        .withIndex('by_municipality_ward', (q) => q.eq('municipalityId', args.municipalityId).eq('wardNo', wardNo))
+        .query("wards")
+        .withIndex("by_municipality_ward", (q) => q.eq("municipalityId", args.municipalityId).eq("wardNo", wardNo))
         .unique();
-      if (!ward) clientError('BAD_REQUEST', 'Unknown ward', { wardNo: ['unknown ward'] });
+      if (!ward) clientError("BAD_REQUEST", "Unknown ward", { wardNo: ["unknown ward"] });
     }
 
     const district = await ctx.db.get(muni.districtId);
@@ -367,13 +367,13 @@ export const saveDraft = mutation({
 
     const merged = mergeDraftArgs(existing, args, muni);
     const normalized = normalizeAddressFields(normalizeOwnerFields(normalizePropertyFields(merged)), muni);
-    validateBusinessRules(normalized, addressCtx, 'draft');
+    validateBusinessRules(normalized, addressCtx, "draft");
 
     const writable = { ...stripLocalId(normalized as SurveyUpsertArgs), districtId: muni.districtId };
 
     if (existing) {
-      const newStatus: Doc<'surveys'>['status'] = existing.status === 'draft' ? 'draft' : existing.status;
-      const newQcStatus: Doc<'surveys'>['qcStatus'] = existing.qcStatus === 'approved' ? 'pending' : existing.qcStatus;
+      const newStatus: Doc<"surveys">["status"] = existing.status === "draft" ? "draft" : existing.status;
+      const newQcStatus: Doc<"surveys">["qcStatus"] = existing.qcStatus === "approved" ? "pending" : existing.qcStatus;
 
       await ctx.db.patch(existing._id, {
         ...writable,
@@ -384,26 +384,26 @@ export const saveDraft = mutation({
       });
       await writeAudit(ctx, {
         actorId: me._id,
-        action: 'survey.draft_saved',
-        entity: 'survey',
+        action: "survey.draft_saved",
+        entity: "survey",
         entityId: existing._id,
       });
       return existing._id;
     }
 
-    const newId = await ctx.db.insert('surveys', {
+    const newId = await ctx.db.insert("surveys", {
       ...writable,
       surveyorId: me._id,
       localId: args.localId,
-      status: 'draft',
-      qcStatus: 'pending',
+      status: "draft",
+      qcStatus: "pending",
       serverVersion: 1,
       clientUpdatedAt: args.clientUpdatedAt,
     });
     await writeAudit(ctx, {
       actorId: me._id,
-      action: 'survey.created',
-      entity: 'survey',
+      action: "survey.created",
+      entity: "survey",
       entityId: newId,
       metadata: { localId: args.localId, draft: true },
     });
@@ -422,7 +422,7 @@ export const upsert = mutation({
   args: surveyInput,
   handler: async (ctx, args) => {
     const me = await requireUser(ctx);
-    requireRole(me, 'surveyor', 'supervisor', 'admin');
+    requireRole(me, "surveyor", "supervisor", "admin");
     const muni = await assertMunicipalityInScope(ctx, me, args.municipalityId);
     assertCanReadWard(me, args.municipalityId, args.wardNo);
 
@@ -432,18 +432,18 @@ export const upsert = mutation({
       configuredPostalCode: muni.postalCode,
     };
     const normalized = normalizeAddressFields(normalizeOwnerFields(normalizePropertyFields(args)), muni);
-    validateBusinessRules(normalized, addressCtx, 'submit');
+    validateBusinessRules(normalized, addressCtx, "submit");
 
     // Confirm ward exists within the municipality
     const ward = await ctx.db
-      .query('wards')
-      .withIndex('by_municipality_ward', (q) => q.eq('municipalityId', args.municipalityId).eq('wardNo', args.wardNo))
+      .query("wards")
+      .withIndex("by_municipality_ward", (q) => q.eq("municipalityId", args.municipalityId).eq("wardNo", args.wardNo))
       .unique();
-    if (!ward) clientError('BAD_REQUEST', 'Unknown ward', { wardNo: ['unknown ward'] });
+    if (!ward) clientError("BAD_REQUEST", "Unknown ward", { wardNo: ["unknown ward"] });
 
     const existing = await ctx.db
-      .query('surveys')
-      .withIndex('by_surveyor_localId', (q) => q.eq('surveyorId', me._id).eq('localId', args.localId))
+      .query("surveys")
+      .withIndex("by_surveyor_localId", (q) => q.eq("surveyorId", me._id).eq("localId", args.localId))
       .unique();
 
     const now = Date.now();
@@ -452,12 +452,12 @@ export const upsert = mutation({
     if (existing) {
       // If the supervisor already approved this row, lock further edits unless
       // it's the supervisor/admin doing the edit (which re-opens QC).
-      if (existing.qcStatus === 'approved' && me.role === 'surveyor') {
-        clientError('LOCKED', 'This survey is locked — request your supervisor to re-open it');
+      if (existing.qcStatus === "approved" && me.role === "surveyor") {
+        clientError("LOCKED", "This survey is locked — request your supervisor to re-open it");
       }
 
-      const newStatus: Doc<'surveys'>['status'] = existing.status === 'draft' ? 'draft' : existing.status;
-      const newQcStatus: Doc<'surveys'>['qcStatus'] = existing.qcStatus === 'approved' ? 'pending' : existing.qcStatus;
+      const newStatus: Doc<"surveys">["status"] = existing.status === "draft" ? "draft" : existing.status;
+      const newQcStatus: Doc<"surveys">["qcStatus"] = existing.qcStatus === "approved" ? "pending" : existing.qcStatus;
 
       await ctx.db.patch(existing._id, {
         ...writable,
@@ -467,25 +467,25 @@ export const upsert = mutation({
       });
       await writeAudit(ctx, {
         actorId: me._id,
-        action: 'survey.updated',
-        entity: 'survey',
+        action: "survey.updated",
+        entity: "survey",
         entityId: existing._id,
       });
       return existing._id;
     }
 
-    const newId = await ctx.db.insert('surveys', {
+    const newId = await ctx.db.insert("surveys", {
       ...writable,
       surveyorId: me._id,
       localId: args.localId,
-      status: 'draft',
-      qcStatus: 'pending',
+      status: "draft",
+      qcStatus: "pending",
       serverVersion: 1,
     });
     await writeAudit(ctx, {
       actorId: me._id,
-      action: 'survey.created',
-      entity: 'survey',
+      action: "survey.created",
+      entity: "survey",
       entityId: newId,
       metadata: { localId: args.localId },
     });
@@ -495,21 +495,21 @@ export const upsert = mutation({
 
 /** Attach or refresh GPS on a draft survey before submit. */
 export const setGps = mutation({
-  args: { id: v.id('surveys'), gps: gpsCapture },
+  args: { id: v.id("surveys"), gps: gpsCapture },
   handler: async (ctx, args) => {
     const me = await requireUser(ctx);
     const survey = await ctx.db.get(args.id);
-    if (!survey) clientError('NOT_FOUND', 'Survey not found');
-    if (survey.surveyorId !== me._id && me.role === 'surveyor') {
-      clientError('FORBIDDEN', 'Not your survey');
+    if (!survey) clientError("NOT_FOUND", "Survey not found");
+    if (survey.surveyorId !== me._id && me.role === "surveyor") {
+      clientError("FORBIDDEN", "Not your survey");
     }
     await assertMunicipalityInScope(ctx, me, survey.municipalityId);
     assertCanReadWard(me, survey.municipalityId, survey.wardNo);
-    if (survey.qcStatus === 'approved' && me.role === 'surveyor') {
-      clientError('LOCKED', 'Survey is locked');
+    if (survey.qcStatus === "approved" && me.role === "surveyor") {
+      clientError("LOCKED", "Survey is locked");
     }
     if (args.gps.accuracyMeters > GPS_ACCEPT_MAX_ACCURACY_METERS) {
-      clientError('VALIDATION', `GPS must be within ±${GPS_ACCEPT_MAX_ACCURACY_METERS} m — retake outside`, {
+      clientError("VALIDATION", `GPS must be within ±${GPS_ACCEPT_MAX_ACCURACY_METERS} m — retake outside`, {
         gps: [`GPS must be within ±${GPS_ACCEPT_MAX_ACCURACY_METERS} m — retake in open sky`],
       });
     }
@@ -525,23 +525,23 @@ export const setGps = mutation({
  * both required photos (front + side).
  */
 export const submit = mutation({
-  args: { id: v.id('surveys') },
+  args: { id: v.id("surveys") },
   handler: async (ctx, args) => {
     const me = await requireUser(ctx);
     const survey = await ctx.db.get(args.id);
-    if (!survey) clientError('NOT_FOUND', 'Survey not found');
-    if (survey.surveyorId !== me._id && me.role === 'surveyor') {
-      clientError('FORBIDDEN', 'Not your survey');
+    if (!survey) clientError("NOT_FOUND", "Survey not found");
+    if (survey.surveyorId !== me._id && me.role === "surveyor") {
+      clientError("FORBIDDEN", "Not your survey");
     }
-    if (survey.status !== 'draft' && survey.status !== 'rejected') {
-      clientError('BAD_STATE', 'Only drafts can be submitted');
+    if (survey.status !== "draft" && survey.status !== "rejected") {
+      clientError("BAD_STATE", "Only drafts can be submitted");
     }
     await assertMunicipalityInScope(ctx, me, survey.municipalityId);
     assertCanReadWard(me, survey.municipalityId, survey.wardNo);
 
     const floors = await ctx.db
-      .query('floors')
-      .withIndex('by_survey', (q) => q.eq('surveyId', args.id))
+      .query("floors")
+      .withIndex("by_survey", (q) => q.eq("surveyId", args.id))
       .collect();
     const areaErrors = validateAreaSection({
       plotSqft: survey.plotSqft,
@@ -549,79 +549,79 @@ export const submit = mutation({
       floorAreasSqft: floors.map((f) => f.areaSqft),
     });
     if (Object.keys(areaErrors).length > 0) {
-      clientError('VALIDATION', 'Area details incomplete', areaErrors);
+      clientError("VALIDATION", "Area details incomplete", areaErrors);
     }
 
     const photos = await ctx.db
-      .query('photos')
-      .withIndex('by_survey', (q) => q.eq('surveyId', args.id))
+      .query("photos")
+      .withIndex("by_survey", (q) => q.eq("surveyId", args.id))
       .collect();
     const slots = new Set(photos.map((p) => p.slot));
     const missing: string[] = [];
-    if (!slots.has('front')) missing.push('front photo required');
-    if (!slots.has('side')) missing.push('side photo required');
+    if (!slots.has("front")) missing.push("front photo required");
+    if (!slots.has("side")) missing.push("side photo required");
     if (missing.length > 0) {
-      clientError('VALIDATION', 'Required photos missing', { photos: missing });
+      clientError("VALIDATION", "Required photos missing", { photos: missing });
     }
     if (!survey.gps) {
-      clientError('VALIDATION', 'GPS capture required', { gps: ['capture GPS first'] });
+      clientError("VALIDATION", "GPS capture required", { gps: ["capture GPS first"] });
     }
 
     const muni = await ctx.db.get(survey.municipalityId);
-    if (!muni) clientError('NOT_FOUND', 'Municipality not found');
+    if (!muni) clientError("NOT_FOUND", "Municipality not found");
     const district = await ctx.db.get(muni.districtId);
     const addressCtx = {
       ...addressTenantContext(muni, district),
       configuredPostalCode: muni.postalCode,
     };
-    validateBusinessRules(survey as unknown as Record<string, unknown>, addressCtx, 'submit');
+    validateBusinessRules(survey as unknown as Record<string, unknown>, addressCtx, "submit");
 
     await ctx.db.patch(args.id, {
-      status: 'submitted',
-      qcStatus: survey.qcStatus === 'rejected' ? 'pending' : survey.qcStatus,
+      status: "submitted",
+      qcStatus: survey.qcStatus === "rejected" ? "pending" : survey.qcStatus,
       submittedAt: Date.now(),
       serverVersion: survey.serverVersion + 1,
     });
     await writeAudit(ctx, {
       actorId: me._id,
-      action: 'survey.submitted',
-      entity: 'survey',
+      action: "survey.submitted",
+      entity: "survey",
       entityId: args.id,
     });
   },
 });
 
 export const remove = mutation({
-  args: { id: v.id('surveys') },
+  args: { id: v.id("surveys") },
   handler: async (ctx, args) => {
     const me = await requireUser(ctx);
     const survey = await ctx.db.get(args.id);
     if (!survey) return;
-    if (survey.surveyorId !== me._id && me.role !== 'admin') {
-      clientError('FORBIDDEN', 'Not your survey');
+    if (survey.surveyorId !== me._id && me.role !== "admin") {
+      clientError("FORBIDDEN", "Not your survey");
     }
     await assertMunicipalityInScope(ctx, me, survey.municipalityId);
-    if (survey.qcStatus === 'approved') {
-      clientError('LOCKED', 'Cannot delete an approved survey');
+    if (survey.qcStatus === "approved") {
+      clientError("LOCKED", "Cannot delete an approved survey");
     }
 
     // Cascade delete child rows.
-    for await (const f of ctx.db.query('floors').withIndex('by_survey', (q) => q.eq('surveyId', args.id))) {
+    for await (const f of ctx.db.query("floors").withIndex("by_survey", (q) => q.eq("surveyId", args.id))) {
       await ctx.db.delete(f._id);
     }
-    for await (const p of ctx.db.query('photos').withIndex('by_survey', (q) => q.eq('surveyId', args.id))) {
+    for await (const p of ctx.db.query("photos").withIndex("by_survey", (q) => q.eq("surveyId", args.id))) {
       await ctx.storage.delete(p.storageId);
       await ctx.db.delete(p._id);
     }
-    for await (const r of ctx.db.query('qcRemarks').withIndex('by_survey', (q) => q.eq('surveyId', args.id))) {
+    for await (const r of ctx.db.query("qcRemarks").withIndex("by_survey", (q) => q.eq("surveyId", args.id))) {
       await ctx.db.delete(r._id);
     }
     await ctx.db.delete(args.id);
 
     await writeAudit(ctx, {
       actorId: me._id,
-      action: 'survey.deleted',
-      entity: 'survey',
+      action: "survey.deleted",
+      entity: "survey",
       entityId: args.id,
     });
   },
@@ -631,7 +631,7 @@ export const remove = mutation({
 
 type SurveyUpsertArgs = {
   localId: string;
-  municipalityId: Id<'municipalities'>;
+  municipalityId: Id<"municipalities">;
   clientUpdatedAt: number;
   wardNo: string;
   parcelNo: string;
@@ -652,8 +652,8 @@ type SurveyUpsertArgs = {
   plinthSqft: number;
   isSlum: boolean;
   municipalWaterConnection: boolean;
-  waterSource: Doc<'surveys'>['waterSource'];
-  sanitationType: Doc<'surveys'>['sanitationType'];
+  waterSource: Doc<"surveys">["waterSource"];
+  sanitationType: Doc<"surveys">["sanitationType"];
   municipalWasteCollection: boolean;
   sectorNo?: string;
   oldPropertyNo?: string;
@@ -661,12 +661,12 @@ type SurveyUpsertArgs = {
   constructedYear?: number;
   respondentName?: string;
   relationship?: string;
-  owners?: Doc<'surveys'>['owners'];
+  owners?: Doc<"surveys">["owners"];
   familySize?: number;
   altMobileNo?: string;
   houseNo?: string;
   electricityNo?: string;
-  gps?: Doc<'surveys'>['gps'];
+  gps?: Doc<"surveys">["gps"];
   street?: string;
 };
 
@@ -685,8 +685,8 @@ function normalizePropertyFields<
     sectorNo: args.sectorNo?.trim() || undefined,
     oldPropertyNo: args.oldPropertyNo?.trim() || undefined,
     propertyId: args.propertyId?.trim() || undefined,
-    parcelNo: (args.parcelNo ?? '').trim(),
-    unitNo: (args.unitNo ?? '').trim(),
+    parcelNo: (args.parcelNo ?? "").trim(),
+    unitNo: (args.unitNo ?? "").trim(),
     constructedYear: args.constructedYear,
   };
 }
@@ -697,7 +697,7 @@ function normalizeOwnerFields<
     altMobileNo?: string;
     respondentName?: string;
     relationship?: string;
-    owners?: Doc<'surveys'>['owners'];
+    owners?: Doc<"surveys">["owners"];
     familySize?: number;
   },
 >(args: T): T {
@@ -707,7 +707,7 @@ function normalizeOwnerFields<
   };
   const owners = normalizeOwners(args.owners as Parameters<typeof normalizeOwners>[0]);
   const relationship = trimOpt(args.relationship as string | undefined);
-  const mobileNo = primaryOwnerMobile(owners, relationship) ?? trimOpt(args.mobileNo as string | undefined) ?? '';
+  const mobileNo = primaryOwnerMobile(owners, relationship) ?? trimOpt(args.mobileNo as string | undefined) ?? "";
   const altMobileNo = owners?.[0]?.altMobileNo ?? trimOpt(args.altMobileNo as string | undefined);
   return {
     ...args,
@@ -720,23 +720,23 @@ function normalizeOwnerFields<
   };
 }
 
-function stripLocalId<T extends { localId: string; surveyorId?: Id<'users'> }>(args: T): Omit<T, 'localId'> {
+function stripLocalId<T extends { localId: string; surveyorId?: Id<"users"> }>(args: T): Omit<T, "localId"> {
   const { localId: _l, ...rest } = args;
   return rest;
 }
 
 type DraftMutationArgs = {
   localId: string;
-  municipalityId: Id<'municipalities'>;
+  municipalityId: Id<"municipalities">;
   clientUpdatedAt: number;
   wardNo?: string;
   [key: string]: unknown;
 };
 
 function mergeDraftArgs(
-  existing: Doc<'surveys'> | null,
+  existing: Doc<"surveys"> | null,
   patch: DraftMutationArgs,
-  muni: Doc<'municipalities'>,
+  muni: Doc<"municipalities">,
 ): SurveyUpsertArgs {
   const base: SurveyUpsertArgs = existing
     ? {
@@ -801,24 +801,24 @@ function pickDefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
 function validateBusinessRules(
   in_: Record<string, unknown>,
   addressCtx: Parameters<typeof validateAddressSection>[1],
-  mode: 'draft' | 'submit' = 'submit',
+  mode: "draft" | "submit" = "submit",
 ): void {
   const details: Record<string, string[]> = {};
-  const strict = mode === 'submit';
+  const strict = mode === "submit";
 
   Object.assign(
     details,
     validateOwnerSection(
       {
         relationship: in_.relationship as string | undefined,
-        owners: in_.owners as Parameters<typeof validateOwnerSection>[0]['owners'],
+        owners: in_.owners as Parameters<typeof validateOwnerSection>[0]["owners"],
       },
       { requirePrimaryMobile: strict },
     ),
   );
-  const denormalizedMobile = String(in_.mobileNo ?? '').trim();
+  const denormalizedMobile = String(in_.mobileNo ?? "").trim();
   if (denormalizedMobile && !isValidIndianOwnerMobile(denormalizedMobile)) {
-    details.mobileNo = ['Enter a valid 10-digit mobile (starts 6-9)'];
+    details.mobileNo = ["Enter a valid 10-digit mobile (starts 6-9)"];
   }
   Object.assign(
     details,
@@ -836,24 +836,24 @@ function validateBusinessRules(
   );
   const plot = in_.plotSqft as unknown as number;
   const plinth = in_.plinthSqft as unknown as number;
-  if (typeof plot === 'number' && typeof plinth === 'number' && plinth > plot && plot > 0) {
-    details.plinthSqft = ['Plinth area cannot exceed plot area'];
+  if (typeof plot === "number" && typeof plinth === "number" && plinth > plot && plot > 0) {
+    details.plinthSqft = ["Plinth area cannot exceed plot area"];
   }
   const familySize = in_.familySize as unknown as number | undefined;
   if (familySize != null && (familySize < 1 || !Number.isInteger(familySize))) {
-    details.familySize = ['Family size must be a whole number ≥ 1'];
+    details.familySize = ["Family size must be a whole number ≥ 1"];
   }
 
-  const parcelNo = String(in_.parcelNo ?? '').trim();
+  const parcelNo = String(in_.parcelNo ?? "").trim();
   if (strict && !parcelNo) {
-    details.parcelNo = ['Parcel number is required'];
+    details.parcelNo = ["Parcel number is required"];
   }
-  const unitNo = String(in_.unitNo ?? '').trim();
+  const unitNo = String(in_.unitNo ?? "").trim();
   if (strict && !unitNo) {
-    details.unitNo = ['Unit number is required'];
+    details.unitNo = ["Unit number is required"];
   }
-  if (strict && !String(in_.assessmentYear ?? '').trim()) {
-    details.assessmentYear = ['Assessment year is required'];
+  if (strict && !String(in_.assessmentYear ?? "").trim()) {
+    details.assessmentYear = ["Assessment year is required"];
   }
   Object.assign(
     details,
@@ -899,8 +899,8 @@ function validateBusinessRules(
   }
   if (Object.keys(details).length > 0) {
     throw new ConvexError({
-      code: 'VALIDATION',
-      message: 'Business rule violation',
+      code: "VALIDATION",
+      message: "Business rule violation",
       details,
     });
   }

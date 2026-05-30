@@ -29,9 +29,9 @@ export default function SurveyDetailScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
   const id = params.id as Id<'surveys'> | undefined;
   const me = useQuery(api.users.currentUser, {});
-  const survey = useQuery(api.surveys.get, id ? { id } : 'skip');
+  const survey = useQuery(api.survey.get, id ? { id } : 'skip');
   const masters = useQuery(api.masters.bundle, {});
-  const submit = useMutation(api.surveys.submit);
+  const submit = useMutation(api.survey.submit);
   const decide = useMutation(api.qc.decide);
   const [toast, setToast] = useState<{ title: string; tone: 'success' | 'danger' } | null>(null);
   const [busy, setBusy] = useState(false);

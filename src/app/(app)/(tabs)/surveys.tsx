@@ -26,7 +26,7 @@ export default function SurveysScreen() {
   const router = useRouter();
   const tabPad = useTabScreenPadding();
   const [filter, setFilter] = useState<StatusFilter>('all');
-  const surveys = useQuery(api.surveys.list, {
+  const surveys = useQuery(api.survey.list, {
     status: filter === 'all' || filter === 'rejected' ? undefined : filter,
     qcStatus: filter === 'rejected' ? 'rejected' : undefined,
     limit: 100,

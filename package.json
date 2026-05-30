@@ -7,6 +7,7 @@
     "dev": "node ./scripts/dev-runner.mjs",
     "dev:clear": "node ./scripts/dev-runner.mjs --clear",
     "dev:tunnel": "node ./scripts/dev-runner.mjs --tunnel",
+    "sync:convex": "node ./scripts/sync-convex.mjs",
     "deploy": "node ./scripts/convex-deploy.mjs",
     "build:android": "expo run:android",
     "build:ios": "expo run:ios",

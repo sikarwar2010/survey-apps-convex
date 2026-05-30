@@ -4,8 +4,8 @@
  * Validates that every step is complete (re-running stepCompletion) and
  * then runs the submit pipeline:
  *
- *   1. `surveys.saveDraft` + floor/photo sync → returns surveyId
- *   2. `surveys.submit({ id: surveyId })` → flips status to 'submitted',
+ *   1. `survey.saveDraft` + floor/photo sync → returns surveyId
+ *   2. `survey.submit({ id: surveyId })` → flips status to 'submitted',
  *      enforces business rules server-side
  *   4. clear the AsyncStorage draft
  *   5. navigate to the survey detail screen
@@ -48,7 +48,7 @@ export default function ReviewScreen() {
   const masters = useQuery(api.masters.bundle, {});
 
   const { save: saveToServer, saving: savingDraft } = useSaveSurveyDraft();
-  const submit = useMutation(api.surveys.submit);
+  const submit = useMutation(api.survey.submit);
 
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<{ title: string; tone: 'success' | 'danger' } | null>(null);

@@ -10,8 +10,8 @@
  *     (b) keep drafts client-side until "submit"
  *
  *   We pick (b). The wizard writes to AsyncStorage on every step; the
- *   Any step can call `surveys.saveDraft` (partial payload, relaxed rules).
- *   Review calls `surveys.submit` after all steps are complete — full
+ *   Any step can call `survey.saveDraft` (partial payload, relaxed rules).
+ *   Review calls `survey.submit` after all steps are complete — full
  *   validation runs server-side at submit time. Idempotency via `localId`
  *   means retries are safe.
  *
@@ -452,7 +452,7 @@ export function useWizardDraft(localId: string | undefined) {
   return { draft, loading, update };
 }
 
-/** Map local draft → `surveys.saveDraft` payload (only fields the user has filled). */
+/** Map local draft → `survey.saveDraft` payload (only fields the user has filled). */
 export function draftToSaveDraftPayload(d: WizardDraft) {
   if (!d.municipalityId) return null;
 
@@ -512,7 +512,7 @@ export function draftToSaveDraftPayload(d: WizardDraft) {
   };
 }
 
-/** Map an AsyncStorage draft → `surveys.upsert` payload (filled-required-fields check). */
+/** Map an AsyncStorage draft → `survey.upsert` payload (filled-required-fields check). */
 export function draftToUpsertArgs(d: WizardDraft) {
   if (
     !d.municipalityId ||

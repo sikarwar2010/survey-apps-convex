@@ -6,10 +6,10 @@
  * Supervisors get a curated subset via `supervisor.ts` (created in a
  * later phase).
  */
-import { ConvexError, v } from 'convex/values';
-import { mutation, query } from './_generated/server';
-import { clientError, requireRole, requireUser, writeAudit } from './helpers';
-import { userRole } from './schema';
+import { ConvexError, v } from "convex/values";
+import { mutation, query } from "./_generated/server";
+import { clientError, requireRole, requireUser, writeAudit } from "./helpers";
+import { userRole } from "./schema";
 
 /* ────────────────────────── approval workflow ────────────────────────── */
 
@@ -21,12 +21,13 @@ export const listPendingApprovals = query({
   args: {},
   handler: async (ctx) => {
     const me = await requireUser(ctx);
-    requireRole(me, 'admin');
+    requireRole(me, "admin");
+    
 
     const rows = await ctx.db
-      .query('users')
-      .withIndex('by_status', (q) => q.eq('status', 'pending_approval'))
-      .order('desc')
+      .query("users")
+      .withIndex("by_status", (q) => q.eq("status", "pending_approval"))
+      .order("desc")
       .collect();
 
     return rows.map((u) => ({
@@ -50,44 +51,44 @@ export const listPendingApprovals = query({
  */
 export const approveUser = mutation({
   args: {
-    userId: v.id('users'),
-    role: v.union(v.literal('surveyor'), v.literal('supervisor'), v.literal('admin')),
-    municipalityId: v.optional(v.id('municipalities')),
-    districtId: v.optional(v.id('districts')),
+    userId: v.id("users"),
+    role: v.union(v.literal("surveyor"), v.literal("supervisor"), v.literal("admin")),
+    municipalityId: v.optional(v.id("municipalities")),
+    districtId: v.optional(v.id("districts")),
     wardAssignments: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     const me = await requireUser(ctx);
-    requireRole(me, 'admin');
+    requireRole(me, "admin");
 
     const target = await ctx.db.get(args.userId);
-    if (!target) clientError('NOT_FOUND', 'User not found');
-    if (target.status === 'active' && target.role !== 'pending') {
-      clientError('ALREADY_APPROVED', 'This user is already active');
+    if (!target) clientError("NOT_FOUND", "User not found");
+    if (target.status === "active" && target.role !== "pending") {
+      clientError("ALREADY_APPROVED", "This user is already active");
     }
 
     // Validate role-specific requirements
     const wards = args.wardAssignments ?? [];
     let districtId = args.districtId;
-    if (args.role !== 'admin') {
+    if (args.role !== "admin") {
       if (!args.municipalityId && !args.districtId) {
-        clientError('BAD_REQUEST', 'Assign a district or ULB for surveyor/supervisor', {
-          municipalityId: ['select a ULB or district'],
+        clientError("BAD_REQUEST", "Assign a district or ULB for surveyor/supervisor", {
+          municipalityId: ["select a ULB or district"],
         });
       }
       if (args.municipalityId) {
         const muni = await ctx.db.get(args.municipalityId);
-        if (!muni) clientError('BAD_REQUEST', 'Unknown municipality');
+        if (!muni) clientError("BAD_REQUEST", "Unknown municipality");
         districtId = muni.districtId;
       } else if (args.districtId) {
         const dist = await ctx.db.get(args.districtId);
-        if (!dist) clientError('BAD_REQUEST', 'Unknown district');
+        if (!dist) clientError("BAD_REQUEST", "Unknown district");
       }
     }
     await ctx.db.patch(args.userId, {
       role: args.role,
-      status: 'active',
-      districtId: args.role === 'admin' ? undefined : districtId,
+      status: "active",
+      districtId: args.role === "admin" ? undefined : districtId,
       municipalityId: args.municipalityId,
       wardAssignments: wards,
       approvedBy: me._id,
@@ -96,8 +97,8 @@ export const approveUser = mutation({
 
     await writeAudit(ctx, {
       actorId: me._id,
-      action: 'user.approved',
-      entity: 'user',
+      action: "user.approved",
+      entity: "user",
       entityId: args.userId,
       metadata: {
         role: args.role,
@@ -107,10 +108,10 @@ export const approveUser = mutation({
     });
 
     // Drop a notification so the user sees "approved!" next time they open the app.
-    await ctx.db.insert('notifications', {
+    await ctx.db.insert("notifications", {
       userId: args.userId,
-      type: 'account_approved',
-      title: 'Account approved',
+      type: "account_approved",
+      title: "Account approved",
       body: `You've been granted ${args.role} access. Pull-to-refresh to start.`,
     });
   },
@@ -119,35 +120,35 @@ export const approveUser = mutation({
 /** Reject a pending user — keeps the row (audit trail) but disables it. */
 export const rejectUser = mutation({
   args: {
-    userId: v.id('users'),
+    userId: v.id("users"),
     reason: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const me = await requireUser(ctx);
-    requireRole(me, 'admin');
+    requireRole(me, "admin");
 
     const target = await ctx.db.get(args.userId);
-    if (!target) clientError('NOT_FOUND', 'User not found');
+    if (!target) clientError("NOT_FOUND", "User not found");
 
     await ctx.db.patch(args.userId, {
-      status: 'disabled',
+      status: "disabled",
       disabledBy: me._id,
       disabledAt: Date.now(),
     });
 
     await writeAudit(ctx, {
       actorId: me._id,
-      action: 'user.rejected',
-      entity: 'user',
+      action: "user.rejected",
+      entity: "user",
       entityId: args.userId,
       metadata: { reason: args.reason },
     });
 
-    await ctx.db.insert('notifications', {
+    await ctx.db.insert("notifications", {
       userId: args.userId,
-      type: 'account_rejected',
-      title: 'Account request denied',
-      body: args.reason ?? 'Contact your administrator for more information.',
+      type: "account_rejected",
+      title: "Account request denied",
+      body: args.reason ?? "Contact your administrator for more information.",
     });
   },
 });
@@ -157,26 +158,26 @@ export const rejectUser = mutation({
 export const listUsers = query({
   args: {
     role: v.optional(userRole),
-    status: v.optional(v.union(v.literal('pending_approval'), v.literal('active'), v.literal('disabled'))),
+    status: v.optional(v.union(v.literal("pending_approval"), v.literal("active"), v.literal("disabled"))),
   },
   handler: async (ctx, args) => {
     const me = await requireUser(ctx);
-    requireRole(me, 'admin', 'supervisor');
+    requireRole(me, "admin", "supervisor");
 
     // Choose the cheapest index for the supplied filter combination.
     let rows;
     if (args.role && args.status) {
       rows = await ctx.db
-        .query('users')
-        .withIndex('by_role_status', (q) => q.eq('role', args.role!).eq('status', args.status!))
+        .query("users")
+        .withIndex("by_role_status", (q) => q.eq("role", args.role!).eq("status", args.status!))
         .collect();
     } else if (args.status) {
       rows = await ctx.db
-        .query('users')
-        .withIndex('by_status', (q) => q.eq('status', args.status!))
+        .query("users")
+        .withIndex("by_status", (q) => q.eq("status", args.status!))
         .collect();
     } else {
-      rows = await ctx.db.query('users').collect();
+      rows = await ctx.db.query("users").collect();
     }
 
     // Hydrate municipality names for the admin table.
@@ -213,23 +214,23 @@ export const listUsers = query({
 /** Assign district + ULB for an active surveyor or supervisor. */
 export const assignTenant = mutation({
   args: {
-    userId: v.id('users'),
-    municipalityId: v.id('municipalities'),
+    userId: v.id("users"),
+    municipalityId: v.id("municipalities"),
     wardAssignments: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     const me = await requireUser(ctx);
-    requireRole(me, 'admin');
+    requireRole(me, "admin");
 
     const target = await ctx.db.get(args.userId);
-    if (!target) clientError('NOT_FOUND', 'User not found');
-    if (target.role !== 'surveyor' && target.role !== 'supervisor') {
-      clientError('BAD_REQUEST', 'Tenant assignment applies to surveyors and supervisors only');
+    if (!target) clientError("NOT_FOUND", "User not found");
+    if (target.role !== "surveyor" && target.role !== "supervisor") {
+      clientError("BAD_REQUEST", "Tenant assignment applies to surveyors and supervisors only");
     }
 
     const muni = await ctx.db.get(args.municipalityId);
     if (!muni || muni.isActive === false) {
-      clientError('BAD_REQUEST', 'Unknown municipality');
+      clientError("BAD_REQUEST", "Unknown municipality");
     }
 
     await ctx.db.patch(args.userId, {
@@ -240,8 +241,8 @@ export const assignTenant = mutation({
 
     await writeAudit(ctx, {
       actorId: me._id,
-      action: 'user.tenant_assigned',
-      entity: 'user',
+      action: "user.tenant_assigned",
+      entity: "user",
       entityId: args.userId,
       metadata: { municipalityId: args.municipalityId, districtId: muni.districtId },
     });
@@ -250,19 +251,19 @@ export const assignTenant = mutation({
 
 export const updateUser = mutation({
   args: {
-    userId: v.id('users'),
+    userId: v.id("users"),
     role: v.optional(userRole),
-    municipalityId: v.optional(v.id('municipalities')),
-    districtId: v.optional(v.id('districts')),
+    municipalityId: v.optional(v.id("municipalities")),
+    districtId: v.optional(v.id("districts")),
     wardAssignments: v.optional(v.array(v.string())),
-    status: v.optional(v.union(v.literal('active'), v.literal('disabled'))),
+    status: v.optional(v.union(v.literal("active"), v.literal("disabled"))),
   },
   handler: async (ctx, args) => {
     const me = await requireUser(ctx);
-    requireRole(me, 'admin');
+    requireRole(me, "admin");
 
     const target = await ctx.db.get(args.userId);
-    if (!target) clientError('NOT_FOUND', 'User not found');
+    if (!target) clientError("NOT_FOUND", "User not found");
 
     const patch: Record<string, unknown> = {};
     if (args.role !== undefined) patch.role = args.role;
@@ -275,19 +276,19 @@ export const updateUser = mutation({
     if (args.wardAssignments !== undefined) patch.wardAssignments = args.wardAssignments;
     if (args.status !== undefined) {
       patch.status = args.status;
-      if (args.status === 'disabled') {
+      if (args.status === "disabled") {
         patch.disabledBy = me._id;
         patch.disabledAt = Date.now();
       }
     }
     if (Object.keys(patch).length === 0) {
-      throw new ConvexError({ code: 'BAD_REQUEST', message: 'Nothing to update' });
+      throw new ConvexError({ code: "BAD_REQUEST", message: "Nothing to update" });
     }
     await ctx.db.patch(args.userId, patch);
     await writeAudit(ctx, {
       actorId: me._id,
-      action: 'user.updated',
-      entity: 'user',
+      action: "user.updated",
+      entity: "user",
       entityId: args.userId,
       metadata: patch,
     });
@@ -306,11 +307,11 @@ export const upsertMaster = mutation({
   },
   handler: async (ctx, args) => {
     const me = await requireUser(ctx);
-    requireRole(me, 'admin');
+    requireRole(me, "admin");
 
     const existing = await ctx.db
-      .query('masters')
-      .withIndex('by_category_value', (q) => q.eq('category', args.category).eq('value', args.value))
+      .query("masters")
+      .withIndex("by_category_value", (q) => q.eq("category", args.category).eq("value", args.value))
       .unique();
 
     if (existing) {
@@ -321,15 +322,15 @@ export const upsertMaster = mutation({
       });
       return existing._id;
     }
-    return await ctx.db.insert('masters', args);
+    return await ctx.db.insert("masters", args);
   },
 });
 
 export const deleteMaster = mutation({
-  args: { id: v.id('masters') },
+  args: { id: v.id("masters") },
   handler: async (ctx, args) => {
     const me = await requireUser(ctx);
-    requireRole(me, 'admin');
+    requireRole(me, "admin");
     await ctx.db.delete(args.id);
   },
 });

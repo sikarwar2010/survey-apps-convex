@@ -19,7 +19,7 @@ export default function DashboardScreen() {
   const tabPad = useTabScreenPadding();
   const me = useQuery(api.users.currentUser, {});
   const counts = useQuery(api.masters.dashboardCounts, {});
-  const recent = useQuery(api.surveys.list, { limit: 5 });
+  const recent = useQuery(api.survey.list, { limit: 5 });
 
   if (me === undefined || counts === undefined || recent === undefined) {
     return <Spinner label="Loading…" />;

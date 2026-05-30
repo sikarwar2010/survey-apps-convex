@@ -1,5 +1,5 @@
 /**
- * Syncs a local AsyncStorage wizard draft to Convex (`surveys.saveDraft`)
+ * Syncs a local AsyncStorage wizard draft to Convex (`survey.saveDraft`)
  * plus child rows (floors, photos, GPS) when present.
  */
 import { api } from '@/convex/_generated/api';
@@ -14,7 +14,7 @@ function floorReadyForSync(f: NonNullable<WizardDraft['floors']>[number]): boole
 
 export function useSaveSurveyDraft() {
   const convex = useConvex();
-  const saveDraft = useMutation(api.surveys.saveDraft);
+  const saveDraft = useMutation(api.survey.saveDraft);
   const upsertFloor = useMutation(api.floors.upsert);
   const removeFloor = useMutation(api.floors.remove);
   const linkPhoto = useMutation(api.photos.linkPhoto);

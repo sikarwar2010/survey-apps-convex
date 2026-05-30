@@ -3,12 +3,12 @@
  * `provisionCurrentUser` is the client fallback when webhooks are delayed or
  * missing (common in local dev before the endpoint is configured).
  */
-import { v } from 'convex/values';
-import type { Id } from './_generated/dataModel';
-import { internalMutation, mutation, type MutationCtx, query } from './_generated/server';
-import { clientError, requireIdentity, writeAudit } from './helpers';
+import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
+import { internalMutation, mutation, type MutationCtx, query } from "./_generated/server";
+import { clientError, requireIdentity, writeAudit } from "./helpers";
 
-const ALLOWED_REQUESTED_ROLES = new Set(['surveyor', 'supervisor']);
+const ALLOWED_REQUESTED_ROLES = new Set(["surveyor", "supervisor"]);
 const MAX_REQUESTED_REASON_LEN = 500;
 
 /** Only surveyor/supervisor may be requested at sign-up; ignore spoofed values. */
@@ -31,8 +31,8 @@ export const currentUser = query({
     if (!ident) return null;
 
     const user = await ctx.db
-      .query('users')
-      .withIndex('by_clerkId', (q) => q.eq('clerkId', ident.subject))
+      .query("users")
+      .withIndex("by_clerkId", (q) => q.eq("clerkId", ident.subject))
       .unique();
 
     if (!user) return null;
@@ -76,13 +76,13 @@ async function upsertUserRecord(
   ctx: MutationCtx,
   args: UpsertUserArgs,
   opts: { fillSignupMetadataOnlyIfEmpty: boolean },
-): Promise<Id<'users'>> {
+): Promise<Id<"users">> {
   const meta = normalizeSignupMetadata(args);
   const normalized: UpsertUserArgs = { ...args, ...meta };
 
   const existing = await ctx.db
-    .query('users')
-    .withIndex('by_clerkId', (q) => q.eq('clerkId', normalized.clerkId))
+    .query("users")
+    .withIndex("by_clerkId", (q) => q.eq("clerkId", normalized.clerkId))
     .unique();
 
   if (existing) {
@@ -116,23 +116,23 @@ async function upsertUserRecord(
     return existing._id;
   }
 
-  const userId = await ctx.db.insert('users', {
+  const userId = await ctx.db.insert("users", {
     clerkId: normalized.clerkId,
     email: normalized.email,
     name: normalized.name,
     avatarUrl: normalized.avatarUrl,
-    role: 'pending',
-    status: 'pending_approval',
+    role: "pending",
+    status: "pending_approval",
     wardAssignments: [],
     requestedRole: normalized.requestedRole,
     requestedReason: normalized.requestedReason,
   });
 
   await writeAudit(ctx, {
-    action: 'user.created',
-    entity: 'user',
+    action: "user.created",
+    entity: "user",
     entityId: userId,
-    metadata: { clerkId: normalized.clerkId, email: normalized.email, source: 'provision' },
+    metadata: { clerkId: normalized.clerkId, email: normalized.email, source: "provision" },
   });
 
   return userId;
@@ -154,11 +154,11 @@ export const provisionCurrentUser = mutation({
   handler: async (ctx, args) => {
     const ident = await requireIdentity(ctx);
 
-    const email = (ident.email ?? args.email ?? '').trim();
+    const email = (ident.email ?? args.email ?? "").trim();
     if (!email) {
       clientError(
-        'PROFILE_INCOMPLETE',
-        'An email address is required. Finish sign-up in Clerk or add a primary email.',
+        "PROFILE_INCOMPLETE",
+        "An email address is required. Finish sign-up in Clerk or add a primary email.",
       );
     }
     const name = (ident.name ?? args.name ?? email).trim() || email;
@@ -198,20 +198,20 @@ export const softDeleteFromClerk = internalMutation({
   args: { clerkId: v.string() },
   handler: async (ctx, args) => {
     const user = await ctx.db
-      .query('users')
-      .withIndex('by_clerkId', (q) => q.eq('clerkId', args.clerkId))
+      .query("users")
+      .withIndex("by_clerkId", (q) => q.eq("clerkId", args.clerkId))
       .unique();
 
     if (!user) return;
 
     await ctx.db.patch(user._id, {
-      status: 'disabled',
+      status: "disabled",
       disabledAt: Date.now(),
     });
 
     await writeAudit(ctx, {
-      action: 'user.deleted',
-      entity: 'user',
+      action: "user.deleted",
+      entity: "user",
       entityId: user._id,
       metadata: { clerkId: args.clerkId },
     });

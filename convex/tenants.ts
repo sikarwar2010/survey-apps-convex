@@ -7,27 +7,27 @@
  *   - municipalityId on user: single ULB (+ its district for display)
  *   - surveyor ward checks remain in helpers.assertCanReadWard
  */
-import { v } from 'convex/values';
-import type { Id } from './_generated/dataModel';
-import { mutation, query } from './_generated/server';
-import { seedAreaMasters } from './areaMasters';
-import { clientError, requireRole, requireUser, writeAudit } from './helpers';
-import { ulbBodyType } from './schema';
-import { seedServiceMasters } from './serviceMasters';
-import { seedTaxationMasters } from './taxationMasters';
+import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
+import { mutation, query } from "./_generated/server";
+import { seedAreaMasters } from "./areaMasters";
+import { clientError, requireRole, requireUser, writeAudit } from "./helpers";
+import { ulbBodyType } from "./schema";
+import { seedServiceMasters } from "./serviceMasters";
+import { seedTaxationMasters } from "./taxationMasters";
 
-export { resolveTenantScope } from './tenancy';
+export { resolveTenantScope } from "./tenancy";
 
 /** Admin inbox — full tenant tree for setup screens. */
 export const listForAdmin = query({
   args: {},
   handler: async (ctx) => {
     const me = await requireUser(ctx);
-    requireRole(me, 'admin');
+    requireRole(me, "admin");
 
-    const districts = await ctx.db.query('districts').collect();
-    const municipalities = await ctx.db.query('municipalities').collect();
-    const wards = await ctx.db.query('wards').collect();
+    const districts = await ctx.db.query("districts").collect();
+    const municipalities = await ctx.db.query("municipalities").collect();
+    const wards = await ctx.db.query("wards").collect();
 
     return districts
       .sort((a, b) => a.name.localeCompare(b.name))
@@ -48,7 +48,7 @@ export const listForAdmin = query({
 
 export const upsertDistrict = mutation({
   args: {
-    id: v.optional(v.id('districts')),
+    id: v.optional(v.id("districts")),
     code: v.string(),
     name: v.string(),
     stateName: v.string(),
@@ -56,17 +56,17 @@ export const upsertDistrict = mutation({
   },
   handler: async (ctx, args) => {
     const me = await requireUser(ctx);
-    requireRole(me, 'admin');
+    requireRole(me, "admin");
 
     const code = args.code.trim().toUpperCase();
-    if (!code) clientError('BAD_REQUEST', 'District code is required');
+    if (!code) clientError("BAD_REQUEST", "District code is required");
 
     const dup = await ctx.db
-      .query('districts')
-      .withIndex('by_code', (q) => q.eq('code', code))
+      .query("districts")
+      .withIndex("by_code", (q) => q.eq("code", code))
       .unique();
     if (dup && dup._id !== args.id) {
-      clientError('BAD_REQUEST', 'District code already exists');
+      clientError("BAD_REQUEST", "District code already exists");
     }
 
     if (args.id) {
@@ -78,14 +78,14 @@ export const upsertDistrict = mutation({
       });
       await writeAudit(ctx, {
         actorId: me._id,
-        action: 'district.updated',
-        entity: 'district',
+        action: "district.updated",
+        entity: "district",
         entityId: args.id,
       });
       return args.id;
     }
 
-    const id = await ctx.db.insert('districts', {
+    const id = await ctx.db.insert("districts", {
       code,
       name: args.name.trim(),
       stateName: args.stateName.trim(),
@@ -93,8 +93,8 @@ export const upsertDistrict = mutation({
     });
     await writeAudit(ctx, {
       actorId: me._id,
-      action: 'district.created',
-      entity: 'district',
+      action: "district.created",
+      entity: "district",
       entityId: id,
     });
     return id;
@@ -103,8 +103,8 @@ export const upsertDistrict = mutation({
 
 export const upsertMunicipality = mutation({
   args: {
-    id: v.optional(v.id('municipalities')),
-    districtId: v.id('districts'),
+    id: v.optional(v.id("municipalities")),
+    districtId: v.id("districts"),
     code: v.string(),
     name: v.string(),
     bodyType: ulbBodyType,
@@ -113,35 +113,35 @@ export const upsertMunicipality = mutation({
   },
   handler: async (ctx, args) => {
     const me = await requireUser(ctx);
-    requireRole(me, 'admin');
+    requireRole(me, "admin");
 
     const district = await ctx.db.get(args.districtId);
-    if (!district) clientError('BAD_REQUEST', 'Unknown district');
+    if (!district) clientError("BAD_REQUEST", "Unknown district");
 
     const code = args.code.trim().toUpperCase();
-    if (!code) clientError('BAD_REQUEST', 'ULB code is required');
+    if (!code) clientError("BAD_REQUEST", "ULB code is required");
 
-    const postalCode = args.postalCode?.replace(/\D/g, '').slice(0, 6);
+    const postalCode = args.postalCode?.replace(/\D/g, "").slice(0, 6);
     if (postalCode && !/^[1-9]\d{5}$/.test(postalCode)) {
-      clientError('BAD_REQUEST', 'Postal code must be 6 digits, not starting with 0');
+      clientError("BAD_REQUEST", "Postal code must be 6 digits, not starting with 0");
     }
     if (!args.id && !postalCode) {
-      clientError('BAD_REQUEST', 'PIN code is required for each ULB');
+      clientError("BAD_REQUEST", "PIN code is required for each ULB");
     }
 
     const dup = await ctx.db
-      .query('municipalities')
-      .withIndex('by_code', (q) => q.eq('code', code))
+      .query("municipalities")
+      .withIndex("by_code", (q) => q.eq("code", code))
       .unique();
     if (dup && dup._id !== args.id) {
-      clientError('BAD_REQUEST', 'ULB code already exists');
+      clientError("BAD_REQUEST", "ULB code already exists");
     }
 
     const row: {
-      districtId: Id<'districts'>;
+      districtId: Id<"districts">;
       code: string;
       name: string;
-      bodyType: (typeof args)['bodyType'];
+      bodyType: (typeof args)["bodyType"];
       isActive: boolean;
       postalCode?: string;
     } = {
@@ -157,25 +157,25 @@ export const upsertMunicipality = mutation({
 
     if (args.id) {
       const existing = await ctx.db.get(args.id);
-      if (!existing) clientError('BAD_REQUEST', 'Unknown municipality');
+      if (!existing) clientError("BAD_REQUEST", "Unknown municipality");
       if (!row.postalCode && !existing.postalCode) {
-        clientError('BAD_REQUEST', 'PIN code is required for each ULB');
+        clientError("BAD_REQUEST", "PIN code is required for each ULB");
       }
       await ctx.db.patch(args.id, row);
       await writeAudit(ctx, {
         actorId: me._id,
-        action: 'municipality.updated',
-        entity: 'municipality',
+        action: "municipality.updated",
+        entity: "municipality",
         entityId: args.id,
       });
       return args.id;
     }
 
-    const id = await ctx.db.insert('municipalities', row);
+    const id = await ctx.db.insert("municipalities", row);
     await writeAudit(ctx, {
       actorId: me._id,
-      action: 'municipality.created',
-      entity: 'municipality',
+      action: "municipality.created",
+      entity: "municipality",
       entityId: id,
     });
     return id;
@@ -184,43 +184,43 @@ export const upsertMunicipality = mutation({
 
 export const upsertWard = mutation({
   args: {
-    id: v.optional(v.id('wards')),
-    municipalityId: v.id('municipalities'),
+    id: v.optional(v.id("wards")),
+    municipalityId: v.id("municipalities"),
     wardNo: v.string(),
     wardCode: v.optional(v.string()),
     name: v.string(),
   },
   handler: async (ctx, args) => {
     const me = await requireUser(ctx);
-    requireRole(me, 'admin');
+    requireRole(me, "admin");
 
     const muni = await ctx.db.get(args.municipalityId);
-    if (!muni) clientError('BAD_REQUEST', 'Unknown municipality');
+    if (!muni) clientError("BAD_REQUEST", "Unknown municipality");
 
     const wardNo = args.wardNo.trim();
     const name = args.name.trim();
-    if (!wardNo) clientError('BAD_REQUEST', 'Ward number is required');
-    if (!name) clientError('BAD_REQUEST', 'Ward name is required');
+    if (!wardNo) clientError("BAD_REQUEST", "Ward number is required");
+    if (!name) clientError("BAD_REQUEST", "Ward name is required");
 
-    const wardCodeInput = (args.wardCode ?? '').trim().toUpperCase();
+    const wardCodeInput = (args.wardCode ?? "").trim().toUpperCase();
     const wardCode = wardCodeInput || `${muni.code}-W${wardNo}`.toUpperCase();
 
     const dupNo = await ctx.db
-      .query('wards')
-      .withIndex('by_municipality_ward', (q) => q.eq('municipalityId', args.municipalityId).eq('wardNo', wardNo))
+      .query("wards")
+      .withIndex("by_municipality_ward", (q) => q.eq("municipalityId", args.municipalityId).eq("wardNo", wardNo))
       .unique();
     if (dupNo && dupNo._id !== args.id) {
-      clientError('BAD_REQUEST', 'Ward number already exists for this ULB');
+      clientError("BAD_REQUEST", "Ward number already exists for this ULB");
     }
 
     const dupCode = await ctx.db
-      .query('wards')
-      .withIndex('by_municipality_ward_code', (q) =>
-        q.eq('municipalityId', args.municipalityId).eq('wardCode', wardCode),
+      .query("wards")
+      .withIndex("by_municipality_ward_code", (q) =>
+        q.eq("municipalityId", args.municipalityId).eq("wardCode", wardCode),
       )
       .unique();
     if (dupCode && dupCode._id !== args.id) {
-      clientError('BAD_REQUEST', 'Ward code already exists for this ULB');
+      clientError("BAD_REQUEST", "Ward code already exists for this ULB");
     }
 
     const row = { wardNo, wardCode, name };
@@ -229,21 +229,21 @@ export const upsertWard = mutation({
       await ctx.db.patch(args.id, row);
       await writeAudit(ctx, {
         actorId: me._id,
-        action: 'ward.updated',
-        entity: 'ward',
+        action: "ward.updated",
+        entity: "ward",
         entityId: args.id,
       });
       return args.id;
     }
 
-    const id = await ctx.db.insert('wards', {
+    const id = await ctx.db.insert("wards", {
       municipalityId: args.municipalityId,
       ...row,
     });
     await writeAudit(ctx, {
       actorId: me._id,
-      action: 'ward.created',
-      entity: 'ward',
+      action: "ward.created",
+      entity: "ward",
       entityId: id,
       metadata: { municipalityId: args.municipalityId, wardCode },
     });
@@ -256,11 +256,11 @@ export const listAssessmentYears = query({
   args: {},
   handler: async (ctx) => {
     const me = await requireUser(ctx);
-    requireRole(me, 'admin');
+    requireRole(me, "admin");
 
     const rows = await ctx.db
-      .query('masters')
-      .withIndex('by_category_position', (q) => q.eq('category', 'assessment_year').eq('isActive', true))
+      .query("masters")
+      .withIndex("by_category_position", (q) => q.eq("category", "assessment_year").eq("isActive", true))
       .collect();
 
     return rows
@@ -278,21 +278,21 @@ export const upsertAssessmentYear = mutation({
   },
   handler: async (ctx, args) => {
     const me = await requireUser(ctx);
-    requireRole(me, 'admin');
+    requireRole(me, "admin");
 
     const value = args.value.trim();
     const label = args.label.trim();
-    if (!value) clientError('BAD_REQUEST', 'Assessment year value is required');
-    if (!label) clientError('BAD_REQUEST', 'Assessment year label is required');
+    if (!value) clientError("BAD_REQUEST", "Assessment year value is required");
+    if (!label) clientError("BAD_REQUEST", "Assessment year label is required");
 
     const existing = await ctx.db
-      .query('masters')
-      .withIndex('by_category_value', (q) => q.eq('category', 'assessment_year').eq('value', value))
+      .query("masters")
+      .withIndex("by_category_value", (q) => q.eq("category", "assessment_year").eq("value", value))
       .unique();
 
     const activeYears = await ctx.db
-      .query('masters')
-      .withIndex('by_category_position', (q) => q.eq('category', 'assessment_year').eq('isActive', true))
+      .query("masters")
+      .withIndex("by_category_position", (q) => q.eq("category", "assessment_year").eq("isActive", true))
       .collect();
     const position =
       args.position ?? (activeYears.length > 0 ? Math.max(...activeYears.map((r) => r.position)) + 1 : 1);
@@ -303,8 +303,8 @@ export const upsertAssessmentYear = mutation({
       return existing._id;
     }
 
-    const id = await ctx.db.insert('masters', {
-      category: 'assessment_year',
+    const id = await ctx.db.insert("masters", {
+      category: "assessment_year",
       value,
       label,
       position,
@@ -312,8 +312,8 @@ export const upsertAssessmentYear = mutation({
     });
     await writeAudit(ctx, {
       actorId: me._id,
-      action: 'master.assessment_year.created',
-      entity: 'masters',
+      action: "master.assessment_year.created",
+      entity: "masters",
       entityId: id,
       metadata: { value },
     });
@@ -326,22 +326,22 @@ export const seedReferenceData = mutation({
   args: {},
   handler: async (ctx) => {
     const me = await requireUser(ctx);
-    requireRole(me, 'admin');
+    requireRole(me, "admin");
 
     const assessmentYears = [
-      { value: '2025-26', label: '2025-26', position: 1 },
-      { value: '2026-27', label: '2026-27', position: 2 },
+      { value: "2025-26", label: "2025-26", position: 1 },
+      { value: "2026-27", label: "2026-27", position: 2 },
     ];
     for (const y of assessmentYears) {
       const row = await ctx.db
-        .query('masters')
-        .withIndex('by_category_value', (q) => q.eq('category', 'assessment_year').eq('value', y.value))
+        .query("masters")
+        .withIndex("by_category_value", (q) => q.eq("category", "assessment_year").eq("value", y.value))
         .unique();
       if (row) {
         await ctx.db.patch(row._id, { label: y.label, position: y.position, isActive: true });
       } else {
-        await ctx.db.insert('masters', {
-          category: 'assessment_year',
+        await ctx.db.insert("masters", {
+          category: "assessment_year",
           value: y.value,
           label: y.label,
           position: y.position,
@@ -353,7 +353,7 @@ export const seedReferenceData = mutation({
     type UlbSeed = {
       code: string;
       name: string;
-      bodyType: 'municipal_council' | 'town_panchayat';
+      bodyType: "municipal_council" | "town_panchayat";
       postalCode: string;
       wards: Array<{ wardNo: string; wardCode: string; name: string }>;
     };
@@ -364,144 +364,144 @@ export const seedReferenceData = mutation({
       ulbs: UlbSeed[];
     }> = [
       {
-        code: 'AGR',
-        name: 'Agra',
+        code: "AGR",
+        name: "Agra",
         ulbs: [
           {
-            code: 'AGR-MC-001',
-            name: 'Agra Municipal Corporation',
-            bodyType: 'municipal_council',
-            postalCode: '282001',
+            code: "AGR-MC-001",
+            name: "Agra Municipal Corporation",
+            bodyType: "municipal_council",
+            postalCode: "282001",
             wards: [
-              { wardNo: '1', wardCode: 'AGR-W01', name: 'Tajganj' },
-              { wardNo: '2', wardCode: 'AGR-W02', name: 'Sadar' },
+              { wardNo: "1", wardCode: "AGR-W01", name: "Tajganj" },
+              { wardNo: "2", wardCode: "AGR-W02", name: "Sadar" },
             ],
           },
           {
-            code: 'AGR-TP-FATEHABAD',
-            name: 'Fatehabad Town Panchayat',
-            bodyType: 'town_panchayat',
-            postalCode: '283111',
-            wards: [{ wardNo: '1', wardCode: 'AGR-FTH-W01', name: 'Fatehabad' }],
+            code: "AGR-TP-FATEHABAD",
+            name: "Fatehabad Town Panchayat",
+            bodyType: "town_panchayat",
+            postalCode: "283111",
+            wards: [{ wardNo: "1", wardCode: "AGR-FTH-W01", name: "Fatehabad" }],
           },
         ],
       },
       {
-        code: 'ETA',
-        name: 'Etah',
+        code: "ETA",
+        name: "Etah",
         ulbs: [
           {
-            code: 'ETA-MC-001',
-            name: 'Etah Municipal Council',
-            bodyType: 'municipal_council',
-            postalCode: '207001',
+            code: "ETA-MC-001",
+            name: "Etah Municipal Council",
+            bodyType: "municipal_council",
+            postalCode: "207001",
             wards: [
-              { wardNo: '1', wardCode: 'ETA-W01', name: 'Kotwali' },
-              { wardNo: '2', wardCode: 'ETA-W02', name: 'Station Road' },
+              { wardNo: "1", wardCode: "ETA-W01", name: "Kotwali" },
+              { wardNo: "2", wardCode: "ETA-W02", name: "Station Road" },
             ],
           },
           {
-            code: 'ETA-TP-JALESAR',
-            name: 'Jalesar Town Panchayat',
-            bodyType: 'town_panchayat',
-            postalCode: '207302',
-            wards: [{ wardNo: '1', wardCode: 'ETA-JAL-W01', name: 'Jalesar' }],
+            code: "ETA-TP-JALESAR",
+            name: "Jalesar Town Panchayat",
+            bodyType: "town_panchayat",
+            postalCode: "207302",
+            wards: [{ wardNo: "1", wardCode: "ETA-JAL-W01", name: "Jalesar" }],
           },
         ],
       },
       {
-        code: 'BAG',
-        name: 'Baghpat',
+        code: "BAG",
+        name: "Baghpat",
         ulbs: [
           {
-            code: 'BAG-MC-001',
-            name: 'Baghpat Municipal Council',
-            bodyType: 'municipal_council',
-            postalCode: '250609',
-            wards: [{ wardNo: '1', wardCode: 'BAG-W01', name: 'Main' }],
+            code: "BAG-MC-001",
+            name: "Baghpat Municipal Council",
+            bodyType: "municipal_council",
+            postalCode: "250609",
+            wards: [{ wardNo: "1", wardCode: "BAG-W01", name: "Main" }],
           },
           {
-            code: 'BAG-TP-BARAUT',
-            name: 'Baraut Town Panchayat',
-            bodyType: 'town_panchayat',
-            postalCode: '250611',
-            wards: [{ wardNo: '1', wardCode: 'BAG-BRT-W01', name: 'Baraut' }],
+            code: "BAG-TP-BARAUT",
+            name: "Baraut Town Panchayat",
+            bodyType: "town_panchayat",
+            postalCode: "250611",
+            wards: [{ wardNo: "1", wardCode: "BAG-BRT-W01", name: "Baraut" }],
           },
         ],
       },
       {
-        code: 'MAIN',
-        name: 'Mainpuri',
+        code: "MAIN",
+        name: "Mainpuri",
         ulbs: [
           {
-            code: 'MAIN-MC-001',
-            name: 'Mainpuri Municipal Council',
-            bodyType: 'municipal_council',
-            postalCode: '205001',
+            code: "MAIN-MC-001",
+            name: "Mainpuri Municipal Council",
+            bodyType: "municipal_council",
+            postalCode: "205001",
             wards: [
-              { wardNo: '1', wardCode: 'MAIN-W01', name: 'Civil Lines' },
-              { wardNo: '2', wardCode: 'MAIN-W02', name: 'Railway Colony' },
+              { wardNo: "1", wardCode: "MAIN-W01", name: "Civil Lines" },
+              { wardNo: "2", wardCode: "MAIN-W02", name: "Railway Colony" },
             ],
           },
           {
-            code: 'MAIN-TP-BHONGAON',
-            name: 'Bhongaon Town Panchayat',
-            bodyType: 'town_panchayat',
-            postalCode: '205262',
-            wards: [{ wardNo: '1', wardCode: 'MAIN-BHO-W01', name: 'Bhongaon' }],
+            code: "MAIN-TP-BHONGAON",
+            name: "Bhongaon Town Panchayat",
+            bodyType: "town_panchayat",
+            postalCode: "205262",
+            wards: [{ wardNo: "1", wardCode: "MAIN-BHO-W01", name: "Bhongaon" }],
           },
         ],
       },
       {
-        code: 'KAS',
-        name: 'Kasganj',
+        code: "KAS",
+        name: "Kasganj",
         ulbs: [
           {
-            code: 'KAS-MC-001',
-            name: 'Kasganj Municipal Council',
-            bodyType: 'municipal_council',
-            postalCode: '207123',
-            wards: [{ wardNo: '1', wardCode: 'KAS-W01', name: 'Sadar' }],
+            code: "KAS-MC-001",
+            name: "Kasganj Municipal Council",
+            bodyType: "municipal_council",
+            postalCode: "207123",
+            wards: [{ wardNo: "1", wardCode: "KAS-W01", name: "Sadar" }],
           },
           {
-            code: 'KAS-TP-SORON',
-            name: 'Soron Town Panchayat',
-            bodyType: 'town_panchayat',
-            postalCode: '207403',
-            wards: [{ wardNo: '1', wardCode: 'KAS-SOR-W01', name: 'Soron' }],
+            code: "KAS-TP-SORON",
+            name: "Soron Town Panchayat",
+            bodyType: "town_panchayat",
+            postalCode: "207403",
+            wards: [{ wardNo: "1", wardCode: "KAS-SOR-W01", name: "Soron" }],
           },
         ],
       },
     ];
 
     for (const d of districtSeeds) {
-      let districtId: Id<'districts'>;
+      let districtId: Id<"districts">;
       const existingDistrict = await ctx.db
-        .query('districts')
-        .withIndex('by_code', (q) => q.eq('code', d.code))
+        .query("districts")
+        .withIndex("by_code", (q) => q.eq("code", d.code))
         .unique();
 
       if (existingDistrict) {
         districtId = existingDistrict._id;
         await ctx.db.patch(districtId, {
           name: d.name,
-          stateName: 'Uttar Pradesh',
+          stateName: "Uttar Pradesh",
           isActive: true,
         });
       } else {
-        districtId = await ctx.db.insert('districts', {
+        districtId = await ctx.db.insert("districts", {
           code: d.code,
           name: d.name,
-          stateName: 'Uttar Pradesh',
+          stateName: "Uttar Pradesh",
           isActive: true,
         });
       }
 
       for (const u of d.ulbs) {
-        let muniId: Id<'municipalities'>;
+        let muniId: Id<"municipalities">;
         const existingMuni = await ctx.db
-          .query('municipalities')
-          .withIndex('by_code', (q) => q.eq('code', u.code))
+          .query("municipalities")
+          .withIndex("by_code", (q) => q.eq("code", u.code))
           .unique();
 
         if (existingMuni) {
@@ -514,7 +514,7 @@ export const seedReferenceData = mutation({
             isActive: true,
           });
         } else {
-          muniId = await ctx.db.insert('municipalities', {
+          muniId = await ctx.db.insert("municipalities", {
             code: u.code,
             name: u.name,
             bodyType: u.bodyType,
@@ -526,13 +526,13 @@ export const seedReferenceData = mutation({
 
         for (const w of u.wards) {
           const existingWard = await ctx.db
-            .query('wards')
-            .withIndex('by_municipality_ward', (q) => q.eq('municipalityId', muniId).eq('wardNo', w.wardNo))
+            .query("wards")
+            .withIndex("by_municipality_ward", (q) => q.eq("municipalityId", muniId).eq("wardNo", w.wardNo))
             .unique();
           if (existingWard) {
             await ctx.db.patch(existingWard._id, { name: w.name, wardCode: w.wardCode });
           } else {
-            await ctx.db.insert('wards', {
+            await ctx.db.insert("wards", {
               municipalityId: muniId,
               wardNo: w.wardNo,
               wardCode: w.wardCode,
@@ -549,8 +549,8 @@ export const seedReferenceData = mutation({
 
     await writeAudit(ctx, {
       actorId: me._id,
-      action: 'tenants.seeded',
-      entity: 'tenants',
+      action: "tenants.seeded",
+      entity: "tenants",
       metadata: { districts: districtSeeds.length },
     });
 
